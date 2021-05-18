@@ -13,17 +13,6 @@ const int dimension = 1000;
 float matrix[dimension][dimension];
 float identity_matrix[dimension][dimension];
 
-void out_txt(const std::string& filename, int j_begin) {
-	std::ofstream ofile;
-	ofile.open(filename, std::ios::out | std::ios::app);
-	for (auto & i : matrix) {
-		for (int j = j_begin; j < dimension; j++)
-			ofile << i[j] << ",";
-		ofile << "\n";
-	}
-	ofile.close();                //close output file
-}
-
 void matrix_read() {
 	int row = 0;
 	
@@ -57,7 +46,7 @@ int main() {
 	
 	float eigen[dimension][dimension];
 	std::copy(&matrix[0][0], &matrix[0][0] + dimension * dimension, &eigen[0][0]);
-	auto eigenM = Eigen::Map < Eigen::Matrix < float, dimension, dimension, Eigen::RowMajor>>(&eigen[0][0]);
+	auto eigenM = Eigen::Map<Eigen::Matrix<float, dimension, dimension, Eigen::RowMajor>>(&eigen[0][0]);
 	
 	auto start = std::chrono::high_resolution_clock::now();
 	auto eigenresult = eigenM.inverse();
@@ -78,7 +67,7 @@ int main() {
 	std::copy(&matrix[0][0], &matrix[0][0] + dimension * dimension, &openmp[0][0]);
 	float openmpres[dimension][dimension];
 	std::copy(&matrix[0][0], &matrix[0][0] + dimension * dimension, &openmpres[0][0]);
-	#pragma omp target enter data map(to: openmp[0:dimension][0:dimension], openmpres[0:dimension][0:dimension])
+#pragma omp target enter data map(to: openmp[0:dimension][0:dimension], openmpres[0:dimension][0:dimension])
 	
 	start = std::chrono::high_resolution_clock::now();
 	openmp_offload(openmp, openmpres, dimension);
