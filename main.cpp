@@ -44,7 +44,7 @@ int main() {
 		}
 	}
 	
-	/*auto eigen = new float[dimension][dimension];
+	auto eigen = new float[dimension][dimension];
 	std::copy(&matrix[0][0], &matrix[0][0] + dimension * dimension, &eigen[0][0]);
 	auto eigenM = new Eigen::Map<Eigen::Matrix<float, dimension, dimension, Eigen::RowMajor>>(&eigen[0][0], dimension, dimension);
 	
@@ -53,7 +53,7 @@ int main() {
 	auto end = std::chrono::high_resolution_clock::now();
 	
 	std::chrono::duration<float> eigen_time = end - start;
-	std::cout << "Eigen Time - inverse:\n" << eigen_time.count() << "ms" << std::endl;*/
+	std::cout << "Eigen Time - inverse:\n" << eigen_time.count() << "ms" << std::endl;
 	
 	
 	auto cpu = new float[dimension][dimension];
@@ -61,9 +61,9 @@ int main() {
 	auto cpures = new float[dimension][dimension];
 	std::copy(&identity_matrix[0][0], &identity_matrix[0][0] + dimension * dimension, &cpures[0][0]);
 	
-	auto start = std::chrono::high_resolution_clock::now();
+	start = std::chrono::high_resolution_clock::now();
 	single_cpu(cpu, cpures);
-	auto end = std::chrono::high_resolution_clock::now();
+	end = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<float> cpu_time = end - start;
 	std::cout << "CPU Time - inverse:\n" << cpu_time.count() << "ms" << std::endl;
 	

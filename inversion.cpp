@@ -73,7 +73,9 @@ void openmp_offload(float matrix[dim][dim], float iden[dim][dim]) {
 				iden[i][x] /= factor;
 				matrix[i][x] /= factor;
 			}
-//#pragma omp target teams distribute parallel for shared(matrix, iden, i)
+			
+			//gauss
+#pragma omp target teams distribute parallel for shared(matrix, iden, i)
 			for (int y = 0; y < dim; y++) {
 				factor = matrix[y][i];
 				if (y != i && factor != 0.0f) {
