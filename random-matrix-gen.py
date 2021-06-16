@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# helper script to generate square matrices of size <arg> with values between -1 and 1
 import random
 import sys
 

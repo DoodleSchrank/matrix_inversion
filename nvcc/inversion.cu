@@ -11,28 +11,17 @@
  }                                                                 \
 }
 
-
-__global__ void pront(float *matrix, int dim) {
-	for (int i = 0; i < dim; i++) {
-		for (int j = 0; j < dim; j++) {
-			printf("%f ", matrix[i * dim + j]);
-		}
-		printf("\n");
-	}
-}
-
 template<int dim>
-void openmp_offload(float matrix[dim][dim], float iden[dim][dim]) {
-	float factor;
-#pragma omp target enter data map(to: matrix[0:dim][0:dim], iden[0:dim][0:dim]) map(alloc: factor)
+void openacc_offload(float matrix[dim][dim], float iden[dim][dim]) {
+#pragma acc enter data copyin(matrix[0:dim][0:dim], iden[0:dim][0:dim])
 	for (int i = 0; i < dim; i++) {
 		if (matrix[i][i] == 0) { // swap lines if 0
 			for (int j = i + 1; j < dim; j++) { // find new line
 				if (matrix[j][i] != 0) {
-#pragma omp target teams distribute parallel for simd
+#pragma acc parallel loop worker vector//vector_length(32)
 					for (int x = i; x < dim; x++) { // swap lines
 						matrix[i][x] += matrix[j][x];
-						iden[i][x] = iden[j][x];
+						iden[i][x] += iden[j][x];
 					}
 					break;
 				}
@@ -41,10 +30,9 @@ void openmp_offload(float matrix[dim][dim], float iden[dim][dim]) {
 		
 		
 		//normalize
-#pragma omp target update from(matrix[i][i])
-		factor = matrix[i][i];
-#pragma omp target teams distribute shared(factor)
-		for (int x = 0; x < 2 * dim; x++) {
+#pragma acc parallel loop
+		for (int x = i; x < dim + i + 1; x++) {
+			float factor = matrix[i][i];
 			if (x < dim)
 				matrix[i][x] /= factor;
 			else
@@ -52,11 +40,11 @@ void openmp_offload(float matrix[dim][dim], float iden[dim][dim]) {
 		}
 		
 		//gauss
-#pragma omp target teams distribute parallel for private(factor)
+#pragma acc parallel loop gang worker //vector_length(32)
 		for (int y = 0; y < dim; y++) {
-			factor = matrix[y][i];
+			float factor = matrix[y][i];
 			if (y != i && factor != 0.0f) {
-#pragma omp simd
+#pragma acc loop vector
 				for (int x = i; x < dim + i + 1; x++) {
 					if (x < dim)
 						matrix[y][x] -= matrix[i][x] * factor;
@@ -66,7 +54,7 @@ void openmp_offload(float matrix[dim][dim], float iden[dim][dim]) {
 			}
 		}
 	}
-#pragma omp target exit data map(from: iden[0:dim][0:dim])
+#pragma acc exit data copyout(iden[0:dim][0:dim])
 }
 
 
@@ -105,6 +93,8 @@ void cuda_offload(float matrix[dim][dim], float iden[dim][dim]) {
 	auto h_A = reinterpret_cast<float *>(matrix);
 	auto h_I = reinterpret_cast<float *>(iden);
 	float *d_A, *d_I;
+	
+	// setup and copy matrices to gpu
 	cudaMalloc(&d_A, dim * dim * sizeof(float));
 	cudaMalloc(&d_I, dim * dim * sizeof(float));
 	cudaCheckErrors();
@@ -112,13 +102,13 @@ void cuda_offload(float matrix[dim][dim], float iden[dim][dim]) {
 	cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 	cudaCheckErrors();
 	
-	// Launch kernel
+	// setup kernel kernel
 	int blocks = ceil(static_cast<double>(dim) / 1024.0f);
 	printf("#: %d, %d\n", blocks, dim);
 	int block_size = floor(dim / blocks);
 	printf("size: %d, %d, %d\n", block_size, dim, blocks);
 	dim3 norm_block(block_size);
-	dim3 norm_grid(1 +ceil(static_cast<double>(dim) / block_size));
+	dim3 norm_grid(1 + ceil(static_cast<double>(dim) / block_size));
 	dim3 gauss_block(block_size);
 	dim3 gauss_grid(2 * blocks, (int) ceil(static_cast<double>(dim) / gauss_block.y));
 	/*int block_size = min(1024, dim);
@@ -144,18 +134,15 @@ void cuda_offload(float matrix[dim][dim], float iden[dim][dim]) {
 		
 		//normalize
 		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
-		//normalize_iden<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
 		cudaCheckErrors();
 		
 		//gauss
 		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
-		//gauss_iden<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
 		cudaCheckErrors();
 	}
-	//pront<<<1, 1>>>(d_A, d_I, dim);
 	cudaCheckErrors();
 	
 	// Copy results back to host
 	cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+	//cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
 }
