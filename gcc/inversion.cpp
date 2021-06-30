@@ -44,16 +44,16 @@ void single_cpu(float *matrix, float *iden, int dim) {
 
 void openmp_offload(float *matrix, float *iden, int dim) {
 	float factor;
-	int x, y, i, j;
-#pragma omp target enter data map(to: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: factor, x, y, i, j)
-	for (i = 0; i < dim; i++) {
+#pragma omp target data map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: factor)
+#pragma omp target
+	for (int i = 0; i < dim; i++) {
 		if (matrix[i * dim + i] == 0) { // swap lines if 0
-			for (j = i + 1; j < dim; j++) { // find new line
+			for (int j = i + 1; j < dim; j++) { // find new line
 				if (matrix[j * dim + i] == 0) {
 					continue;
 				}
-#pragma omp target teams distribute parallel for simd
-				for (x = i; x < dim; x++) { // swap lines
+#pragma omp teams distribute parallel for simd
+				for (int x = i; x < dim; x++) { // swap lines
 					matrix[i * dim + x] += matrix[j * dim + x];
 					iden[i * dim + x] = iden[j * dim + x];
 				}
@@ -63,10 +63,10 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 		
 		
 		//normalize
-#pragma omp target update from(matrix[i * dim + i])
+//#pragma omp target update from(matrix[i * dim + i])
 		factor = matrix[i * dim + i];
-#pragma omp target teams distribute private(x) shared(factor)
-		for (x = i; x < dim + i + 1; x++) {
+#pragma omp teams distribute shared(factor)
+		for (int x = i; x < dim + i + 1; x++) {
 			if (x >= 2 * dim)
 				printf("%d", x);
 			//factor = matrix[i * dim + i];
@@ -77,12 +77,12 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 		}
 		
 		//gauss
-#pragma omp target teams distribute parallel for private(x, y, factor)
-		for (y = 0; y < dim; y++) {
+#pragma omp teams distribute parallel for private(factor)
+		for (int y = 0; y < dim; y++) {
 			factor = matrix[y * dim + i];
 			if (y != i && factor != 0.0f) {
 #pragma omp simd
-				for (x = i; x < dim + i + 1; x++) {
+				for (int x = i; x < dim + i + 1; x++) {
 					if (x < dim)
 						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
 					else
@@ -91,5 +91,5 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 			}
 		}
 	}
-#pragma omp target exit data map(from: iden[0:dim*dim])
+//#pragma omp target exit data map(from: matrix[0:dim*dim], iden[0:dim*dim])
 }
