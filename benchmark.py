@@ -4,5 +4,5 @@ from subprocess import call
 size = 2
 
 while size < 10000:
-    call(["./nvcc/main", str(size)])
+    call(["./gcc/main", str(size), str(4)])
     size = size * 2

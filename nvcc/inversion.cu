@@ -9,17 +9,67 @@
  }                                                                 \
 }
 
+void openmp_offload(float *matrix, float *iden, int dim) {
+	float factor;
+#pragma omp target data map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(to: factor)
+	for (int i = 0; i < dim; i++) {
+//#pragma omp target
+		if (matrix[i * dim + i] == 0) { // swap lines if 0
+			for (int j = i + 1; j < dim; j++) { // find new line
+				if (matrix[j * dim + i] == 0) {
+					continue;
+				}
+#pragma omp target teams distribute parallel for simd
+				for (int x = i; x < dim; x++) { // swap lines
+					matrix[i * dim + x] += matrix[j * dim + x];
+					iden[i * dim + x] = iden[j * dim + x];
+				}
+				break;
+			}
+		}
+		
+		
+		//normalize
+#pragma omp target update from(matrix[i * dim + i])
+		factor = matrix[i * dim + i];
+#pragma omp target teams distribute shared(factor)
+		for (int x = i; x < dim + i + 1; x++) {
+			if (x >= 2 * dim)
+				printf("%d", x);
+			//factor = matrix[i * dim + i];
+			if (x < dim)
+				matrix[i * dim + x] /= factor;
+			else
+				iden[i * dim + x - dim] /= factor;
+		}
+		
+		//gauss
+#pragma omp target teams distribute parallel for private(factor)
+		for (int y = 0; y < dim; y++) {
+			factor = matrix[y * dim + i];
+			if (y != i && factor != 0.0f) {
+#pragma omp simd
+				for (int x = i; x < dim + i + 1; x++) {
+					if (x < dim)
+						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
+					else
+						iden[y * dim + x - dim] -= iden[i * dim + x - dim] * factor;
+				}
+			}
+		}
+	}
+//#pragma omp target exit data map(from: matrix[0:dim*dim], iden[0:dim*dim])
+}
+
 void openacc_offload(float* matrix, float* iden, int dim) {
 	float factor;
-	int x, y, i, j;
-	int size = dim * dim;
-#pragma acc data copyin(matrix[0:size], iden[0:size]) copyout(iden[0:size]) create(factor, x, y, i, j)
-	for (i = 0; i < dim; i++) {
+#pragma acc data copyin(matrix[0:dim * dim], iden[0:dim * dim]) copyout(matrix[0:dim * dim], iden[0:dim * dim]) create(factor)
+	for (int i = 0; i < dim; i++) {
 		if (matrix[i * dim + i] == 0) { // swap lines if 0
-			for (j = i + 1; j < dim; j++) { // find new line
+			for (int j = i + 1; j < dim; j++) { // find new line
 				if (matrix[j * dim + i] != 0) {
 #pragma acc parallel loop worker vector//vector_length(32)
-					for (x = i; x < dim; x++) { // swap lines
+					for (int x = i; x < dim; x++) { // swap lines
 						matrix[i * dim + x] += matrix[j * dim + x];
 						iden[i * dim + x] += iden[j * dim + x];
 					}
@@ -34,7 +84,7 @@ void openacc_offload(float* matrix, float* iden, int dim) {
 		factor = matrix[i * dim + i];
 	};
 #pragma acc parallel loop
-		for (x = i; x < dim + i + 1; x++) {
+		for (int x = i; x < dim + i + 1; x++) {
 			factor = matrix[i * dim + i];
 			if (x < dim)
 				matrix[i * dim + x] /= factor;
@@ -45,11 +95,11 @@ void openacc_offload(float* matrix, float* iden, int dim) {
 		
 		//gauss
 #pragma acc parallel loop gang worker //vector_length(32)
-		for (y = 0; y < dim; y++) {
+		for (int y = 0; y < dim; y++) {
 			float factor = matrix[y * dim + i];
 			if (y != i && factor != 0.0f) {
 #pragma acc loop vector
-				for (x = i; x < dim + i + 1; x++) {
+				for (int x = i; x < dim + i + 1; x++) {
 					if (x < dim)
 						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
 					else
@@ -149,5 +199,5 @@ void cuda_offload(float* matrix, float* iden, int dim) {
 	
 	// Copy results back to host
 	cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-	//cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
 }

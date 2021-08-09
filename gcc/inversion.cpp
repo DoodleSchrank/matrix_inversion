@@ -43,10 +43,10 @@ void single_cpu(float *matrix, float *iden, int dim) {
 
 
 void openmp_offload(float *matrix, float *iden, int dim) {
-	float factor;
-#pragma omp target data map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: factor)
-#pragma omp target
-	for (int i = 0; i < dim; i++) {
+	int i;
+#pragma omp target map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: i)
+	for (i = 0; i < dim; i++) {
+//#pragma omp target update to(i)
 		if (matrix[i * dim + i] == 0) { // swap lines if 0
 			for (int j = i + 1; j < dim; j++) { // find new line
 				if (matrix[j * dim + i] == 0) {
@@ -61,25 +61,23 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 			}
 		}
 		
-		
 		//normalize
-//#pragma omp target update from(matrix[i * dim + i])
-		factor = matrix[i * dim + i];
-#pragma omp teams distribute shared(factor)
-		for (int x = i; x < dim + i + 1; x++) {
-			if (x >= 2 * dim)
-				printf("%d", x);
-			//factor = matrix[i * dim + i];
-			if (x < dim)
+#pragma omp teams distribute
+		for (int x = i + 1; x < dim + i + 1; x++) {
+			float factor = matrix[i * dim + i];
+			if (x < dim) {
 				matrix[i * dim + x] /= factor;
-			else
+			} else {
 				iden[i * dim + x - dim] /= factor;
+			}
 		}
-		
+		matrix[i * dim + i] = 1;
+//#pragma omp update to(matrix[i * dim + i])
+
 		//gauss
-#pragma omp teams distribute parallel for private(factor)
+#pragma omp teams distribute parallel for
 		for (int y = 0; y < dim; y++) {
-			factor = matrix[y * dim + i];
+			float factor = matrix[y * dim + i];
 			if (y != i && factor != 0.0f) {
 #pragma omp simd
 				for (int x = i; x < dim + i + 1; x++) {

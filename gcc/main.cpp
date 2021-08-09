@@ -69,13 +69,16 @@ int main(int argc, char *argv[]) {
 		for (int y = 0; y < dimension; y++) {
 			for(int x = 0; x < dimension; x++) {
 				error = fabs(matrix[y * dimension + x] - eigenresult(y, x));
-				
-				if (error > threshold || std::isnan(error)) {
+				if(std::isnan(error)) {
+					printf("NaN\n");
+					return 0;
+				}
+				if (error > threshold) {
 					errc++;
-					if (maxerr < error) {
+					if (maxerr < error / matrix[y * dimension + x]) {
 						maxerr = error / matrix[y * dimension + x];
 					}
-					if (minerr > error) minerr = error / matrix[y * dimension + x];
+					if (minerr > error / matrix[y * dimension + x]) minerr = error / matrix[y * dimension + x];
 				}
 				
 			}
@@ -103,8 +106,11 @@ int main(int argc, char *argv[]) {
 		for (int y = 0; y < dimension; y++) {
 			for(int x = 0; x < dimension; x++) {
 				error = fabs(matrix[y * dimension + x] - cpu[y * dimension + x]);
-				
-				if (error > threshold || std::isnan(error)) {
+				if(std::isnan(error)) {
+					printf("NaN\n");
+					return 0;
+				}
+				if (error > threshold) {
 					errc++;
 					if (maxerr < error) {
 						maxerr = error / matrix[y * dimension + x];
@@ -129,7 +135,7 @@ int main(int argc, char *argv[]) {
 		openmp_offload(openmpres, openmp, dimension);
 		
 		std::chrono::duration<float> openmp_offload_time = end - start;
-		printf("%04f\n", openmp_offload_time.count());
+		printf("OpenMP: %04f\n", openmp_offload_time.count());
 		
 		errc = 0;
 		minerr = 1000000.;
@@ -150,6 +156,16 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		printf("OpenMP #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
+		/*for (int i = 0; i < dimension; i++) {
+			for (int j = 0; j < dimension; j++) {
+				printf("%04f ", matrix[i * dimension + j]);
+			}
+			printf("  \t");
+			for (int j = 0; j < dimension; j++) {
+				printf("%04f ", openmp[i * dimension + j]);
+			}
+			printf("  \n");
+		}*/
 	}
 	
 	
