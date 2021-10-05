@@ -2,7 +2,7 @@
 Currently compiles for g++:<br>
 <code>g++ -o main main.cpp -I /usr/include/eigen3/ -O2 -fopenmp</code><br>
 for nvc++:<br>
-<code>nvc++ -fast -o main main.cu -O2 -acc</code><br>
+<code>nvc++ -o main main.cu -fast -acc -fopenmp</code><br>
 in the respective folders.
 
 Usable with <code>./matrix _size_ _alg_</code> where size determines the dimension of the matrix that is generated in the parent directory with the supplemented <code>random-matrix.py</code>.<br>
