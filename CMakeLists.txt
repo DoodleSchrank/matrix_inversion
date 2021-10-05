@@ -1,6 +1,7 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_CXX_COMPILER "/home/yannik/programs/spack/opt/spack/linux-arch-skylake/gcc-10.2.0/gcc-10.2.0-plfrsmdlee3htzk7cecy2lnvkmhwcfxt/bin/g++")
+set(CMAKE_CXX_COMPILER "/home/yannik/programs/spack/opt/spack/linux-archrolling-skylake/gcc-11.1.0/gcc-11.2.0-sacutezrgifekoo3z5tmzaps6twen6jm/bin/g++")
+set(CMAKE_CUDA_COMPILER "/usr/bin/nvc++")
 project(MatrixInversion LANGUAGES CXX CUDA)
 
 
@@ -20,7 +21,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 add_subdirectory(gcc)
 add_subdirectory(nvcc)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O2 -Wall -Wextra -acc")
+set(CMAKE_CUDA_FLAGS "-O2 -Wall -Wextra -acc -fopenmp")
 
 
 target_link_libraries (MatrixInversionGCC Eigen3::Eigen)

@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include <chrono>
 #include <string>
+#include <algorithm>
 
 void matrix_read(int dim, float *matrix) {
 	int row = 0;
@@ -19,7 +20,6 @@ void matrix_read(int dim, float *matrix) {
 		row++;
 	}
 }
-
 int main(int argc, char *argv[]) {
 	if (argc < 2 || argc > 3)
 		return 0;
@@ -53,10 +53,10 @@ int main(int argc, char *argv[]) {
 	if ((algorithms & 0x1) != 0) {
 		auto openacc = new float[dimension * dimension + dimension];
 		std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension,
-		          &openacc[0 * dimension + 0]);
+		          &openacc[0]);
 		auto openaccres = new float[dimension * dimension + dimension];
 		std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension,
-		          &openaccres[0 * dimension + 0]);
+		          &openaccres[0]);
 		
 		start = std::chrono::high_resolution_clock::now();
 		openacc_offload(openacc, openaccres, dimension);
@@ -64,11 +64,11 @@ int main(int argc, char *argv[]) {
 		openacc_offload(openaccres, openacc, dimension);
 		
 		std::chrono::duration<float> openacc_offload_time = end - start;
-		printf("OpenACC: %04f\n", openacc_offload_time.count());
 		
 		errc = 0;
-		minerr = 1000000.;
+		minerr = 10000000000000000.;
 		maxerr = threshold;
+		std::string msg;
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
 				error = fabs(matrix[y * dimension + x] - openacc[y * dimension + x]);
@@ -84,6 +84,7 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		printf("OpenACC #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
+		printf("OpenACC: %04f\n", openacc_offload_time.count());
 	}
 	
 	
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
 		printf("CUDA: %04f\n", cuda_time.count());
 		
 		errc = 0;
-		minerr = 1000000.;
+		minerr = 10000000000000000.;
 		maxerr = threshold;
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
@@ -123,51 +124,21 @@ int main(int argc, char *argv[]) {
 		printf("CUDA #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
 	}
 	
-	if((algorithms & 0x4) != 0) {
-		auto openmp = new float[dimension * dimension];
-		std::copy(&matrix[0], &matrix[0] + dimension * dimension, &openmp[0]);
-		auto openmpres = new float[dimension * dimension];
-		std::copy(&identity_matrix[0], &identity_matrix[0] + dimension * dimension, &openmpres[0]);
-		
-		start = std::chrono::high_resolution_clock::now();
-		openmp_offload(openmp, openmpres, dimension);
-		end = std::chrono::high_resolution_clock::now();
-		openmp_offload(openmpres, openmp, dimension);
-		
-		std::chrono::duration<float> openmp_offload_time = end - start;
-		printf("OpenMP: %04f\n", openmp_offload_time.count());
-		
-		errc = 0;
-		minerr = 1000000.;
-		maxerr = threshold;
-		for (int y = 0; y < dimension; y++) {
-			for(int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - openmp[y * dimension + x]);
-				if(std::isnan(error)) {
-					printf("NaN\n");
-					return 0;
+	/*for (int y = 0; y < dimension; y++) {
+		for (int x = 0; x < dimension; x++) {
+			error = fabs(cuda[y * dimension + x] - openacc[y * dimension + x]);
+
+			if (error > threshold || std::isnan(error)) {
+				errc++;
+				if (maxerr < error) {
+					maxerr = error / matrix[y * dimension + x];
 				}
-				if (error > threshold) {
-					errc++;
-					if (maxerr < error) maxerr = error / matrix[y * dimension + x];
-					else if (minerr > error) minerr = error / matrix[y * dimension + x];
-				}
-				
+				if (minerr > error) minerr = error / matrix[y * dimension + x];
 			}
+			
 		}
-		printf("OpenMP #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
-		/*for (int i = 0; i < dimension; i++) {
-			for (int j = 0; j < dimension; j++) {
-				printf("%04f ", matrix[i * dimension + j]);
-			}
-			printf("  \t");
-			for (int j = 0; j < dimension; j++) {
-				printf("%04f ", openmp[i * dimension + j]);
-			}
-			printf("  \n");
-		}*/
 	}
-	
+	printf("CUDA vs OpenACC #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);*/
 	
 	
 	

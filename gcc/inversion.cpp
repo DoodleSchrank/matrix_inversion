@@ -44,7 +44,7 @@ void single_cpu(float *matrix, float *iden, int dim) {
 
 void openmp_offload(float *matrix, float *iden, int dim) {
 	int i;
-#pragma omp target map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: i)
+#pragma omp target data map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: i)
 	for (i = 0; i < dim; i++) {
 //#pragma omp target update to(i)
 		if (matrix[i * dim + i] == 0) { // swap lines if 0
@@ -52,7 +52,7 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 				if (matrix[j * dim + i] == 0) {
 					continue;
 				}
-#pragma omp teams distribute parallel for simd
+#pragma omp target teams distribute parallel for simd
 				for (int x = i; x < dim; x++) { // swap lines
 					matrix[i * dim + x] += matrix[j * dim + x];
 					iden[i * dim + x] = iden[j * dim + x];
@@ -62,7 +62,7 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 		}
 		
 		//normalize
-#pragma omp teams distribute
+#pragma omp target teams distribute parallel for
 		for (int x = i + 1; x < dim + i + 1; x++) {
 			float factor = matrix[i * dim + i];
 			if (x < dim) {
@@ -72,10 +72,10 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 			}
 		}
 		matrix[i * dim + i] = 1;
-//#pragma omp update to(matrix[i * dim + i])
+#pragma omp target update to(matrix[i * dim + i])
 
 		//gauss
-#pragma omp teams distribute parallel for
+#pragma omp target teams distribute parallel for
 		for (int y = 0; y < dim; y++) {
 			float factor = matrix[y * dim + i];
 			if (y != i && factor != 0.0f) {
