@@ -8,7 +8,7 @@
 #include <Eigen/Dense>
 #include <chrono>
 
-void matrix_read(int dim, float* matrix) {
+void matrix_read(int dim, float *matrix) {
 	int row = 0;
 	
 	std::ifstream infile(("../randomMatrix_" + std::to_string(dim) + ".txt").c_str());
@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
 	auto matrix = new float[dimension * dimension];
 	auto identity_matrix = new float[dimension * dimension];
 	
-	matrix_read(dimension, static_cast<float*>(matrix));
+	matrix_read(dimension, static_cast<float *>(matrix));
 	
 	//fill identity matrix
 #pragma omp parallel for collapse(2)
@@ -43,17 +43,19 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
-	std::chrono::time_point<std::chrono::system_clock> start, end;
+	std::chrono::time_point <std::chrono::system_clock> start, end;
 	double error;
-	double threshold = 0.00001;
+	double threshold = 0.001;
 	int errc;
 	double minerr = 1000000.;
 	double maxerr = threshold;
 	
-	if((algorithms & 0x1) != 0) {
-		auto eigen = new float[dimension * dimension + dimension];
-		std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension, &eigen[0 * dimension + 0]);
-		Eigen::MatrixXf eigenM = Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(eigen, dimension, dimension);
+	if ((algorithms & 0x1) != 0) {
+		auto eigen = new float[dimension * dimension];
+		std::copy(matrix, matrix + dimension * dimension, eigen);
+		Eigen::MatrixXf
+		eigenM = Eigen::Map < Eigen::Matrix < float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor
+				>> (eigen, dimension, dimension);
 		
 		start = std::chrono::high_resolution_clock::now();
 		Eigen::MatrixXf eigenresult = eigenM.inverse();
@@ -67,30 +69,31 @@ int main(int argc, char *argv[]) {
 		minerr = 1000000.;
 		maxerr = threshold;
 		for (int y = 0; y < dimension; y++) {
-			for(int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - eigenresult(y, x));
-				if(std::isnan(error)) {
+			for (int x = 0; x < dimension; x++) {
+				error = fabs(eigenresult(y, x) - eigenM(y, x));
+				if (std::isnan(error)) {
 					printf("NaN\n");
 					return 0;
 				}
 				if (error > threshold) {
 					errc++;
-					if (maxerr < error / matrix[y * dimension + x]) {
-						maxerr = error / matrix[y * dimension + x];
+					if (maxerr < error) {
+						maxerr = error;
 					}
-					if (minerr > error / matrix[y * dimension + x]) minerr = error / matrix[y * dimension + x];
+					if (minerr > error) minerr = error;
 				}
-				
 			}
 		}
 		printf("Eigen #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
 	}
 	
-	if((algorithms & 0x2) != 0) {
+	if ((algorithms & 0x2) != 0) {
 		auto cpu = new float[dimension * dimension + dimension];
-		std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension, &cpu[0 * dimension + 0]);
+		std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension,
+		          &cpu[0 * dimension + 0]);
 		auto cpures = new float[dimension * dimension + dimension];
-		std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension, &cpures[0 * dimension + 0]);
+		std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension,
+		          &cpures[0 * dimension + 0]);
 		
 		start = std::chrono::high_resolution_clock::now();
 		single_cpu(cpu, cpures, dimension);
@@ -104,9 +107,9 @@ int main(int argc, char *argv[]) {
 		minerr = 1000000.;
 		maxerr = threshold;
 		for (int y = 0; y < dimension; y++) {
-			for(int x = 0; x < dimension; x++) {
+			for (int x = 0; x < dimension; x++) {
 				error = fabs(matrix[y * dimension + x] - cpu[y * dimension + x]);
-				if(std::isnan(error)) {
+				if (std::isnan(error)) {
 					printf("NaN\n");
 					return 0;
 				}
@@ -123,7 +126,7 @@ int main(int argc, char *argv[]) {
 		printf("CPU #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
 	}
 	
-	if((algorithms & 0x4) != 0) {
+	if ((algorithms & 0x4) != 0) {
 		auto openmp = new float[dimension * dimension];
 		std::copy(&matrix[0], &matrix[0] + dimension * dimension, &openmp[0]);
 		auto openmpres = new float[dimension * dimension];
@@ -136,6 +139,40 @@ int main(int argc, char *argv[]) {
 		
 		std::chrono::duration<float> openmp_offload_time = end - start;
 		printf("OpenMP: %04f\n", openmp_offload_time.count());
+		
+		errc = 0;
+		minerr = 1000000.;
+		maxerr = threshold;
+		for (int y = 0; y < dimension; y++) {
+			for (int x = 0; x < dimension; x++) {
+				error = fabs(matrix[y * dimension + x] - openmp[y * dimension + x]);
+				if (std::isnan(error)) {
+					printf("NaN\n");
+					return 0;
+				}
+				if (error > threshold) {
+					errc++;
+					if (maxerr < error) maxerr = error / matrix[y * dimension + x];
+					else if (minerr > error) minerr = error / matrix[y * dimension + x];
+				}
+				
+			}
+		}
+		printf("OpenMP #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
+		
+	}
+	
+	/*if((algorithms & 0x8) != 0) {
+		auto adjugate = new float[4][4];
+		std::copy(matrix, matrix + dimension * dimension, adjugate);
+		
+		start = std::chrono::high_resolution_clock::now();
+		adjugate(adjugate);
+		end = std::chrono::high_resolution_clock::now();
+		adjugate(adjugate);
+		
+		std::chrono::duration<float> adjugate_time = end - start;
+		printf("Adjugate: %04f\n", adjugate_time.count());
 		
 		errc = 0;
 		minerr = 1000000.;
@@ -155,18 +192,8 @@ int main(int argc, char *argv[]) {
 				
 			}
 		}
-		printf("OpenMP #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
-		/*for (int i = 0; i < dimension; i++) {
-			for (int j = 0; j < dimension; j++) {
-				printf("%04f ", matrix[i * dimension + j]);
-			}
-			printf("  \t");
-			for (int j = 0; j < dimension; j++) {
-				printf("%04f ", openmp[i * dimension + j]);
-			}
-			printf("  \n");
-		}*/
-	}
+		printf("Adjugate #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
+	}*/
 	
 	
 	
@@ -236,6 +263,6 @@ int main(int argc, char *argv[]) {
 		}
 		printf("\n");
 	}*/
-
-return 0;
+	
+	return 0;
 }

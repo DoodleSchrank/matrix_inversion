@@ -48,20 +48,23 @@ int main(int argc, char *argv[]) {
 	int errc;
 	double minerr = 1000000.;
 	double maxerr = threshold;
+	int isnan = 0;
 	
+	auto openacc = new float[dimension * dimension];
+	auto openaccres = new float[dimension * dimension];
 	
+	auto cuda = new float[dimension * dimension];
+	auto cudares = new float[dimension * dimension];
 	if ((algorithms & 0x1) != 0) {
-		auto openacc = new float[dimension * dimension + dimension];
 		std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension,
 		          &openacc[0]);
-		auto openaccres = new float[dimension * dimension + dimension];
 		std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension,
 		          &openaccres[0]);
 		
 		start = std::chrono::high_resolution_clock::now();
 		openacc_offload(openacc, openaccres, dimension);
 		end = std::chrono::high_resolution_clock::now();
-		openacc_offload(openaccres, openacc, dimension);
+		//openacc_offload(openaccres, openacc, dimension);
 		
 		std::chrono::duration<float> openacc_offload_time = end - start;
 		
@@ -73,33 +76,36 @@ int main(int argc, char *argv[]) {
 			for (int x = 0; x < dimension; x++) {
 				error = fabs(matrix[y * dimension + x] - openacc[y * dimension + x]);
 				
-				if (error > threshold || std::isnan(error)) {
+				if(std::isnan( openacc[y * dimension + x])) {
+					isnan++;
+					continue;
+				}
+				
+				if (error > threshold) {
 					errc++;
 					if (maxerr < error) {
-						maxerr = error / matrix[y * dimension + x];
+						maxerr = error;
 					}
-					if (minerr > error) minerr = error / matrix[y * dimension + x];
+					if (minerr > error) minerr = error;
 				}
 				
 			}
 		}
-		printf("OpenACC #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
+		printf("OpenACC #err: %d - minerr:%04f - maxerr:%04f   isnan: %d\n", errc, minerr, maxerr, isnan);
 		printf("OpenACC: %04f\n", openacc_offload_time.count());
 	}
 	
 	
 	if ((algorithms & 0x2) != 0) {
-		auto cuda = new float[dimension * dimension + dimension];
-		std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension,
-		          &cuda[0 * dimension + 0]);
-		auto cudares = new float[dimension * dimension + dimension];
-		std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension,
-		          &cudares[0 * dimension + 0]);
+		std::copy(matrix, matrix + dimension * dimension,
+				  cuda);
+		std::copy(identity_matrix, identity_matrix + dimension * dimension,
+				  cudares);
 		
 		start = std::chrono::high_resolution_clock::now();
 		cuda_offload(cuda, cudares, dimension);
 		end = std::chrono::high_resolution_clock::now();
-		cuda_offload(cudares, cuda, dimension);
+		//cuda_offload(cudares, cuda, dimension);
 		
 		std::chrono::duration<float> cuda_time = end - start;
 		printf("CUDA: %04f\n", cuda_time.count());
@@ -107,23 +113,66 @@ int main(int argc, char *argv[]) {
 		errc = 0;
 		minerr = 10000000000000000.;
 		maxerr = threshold;
+		
+		int xmax, ymax;
+		
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
+				if(std::isnan( cuda[y * dimension + x])) {
+					isnan++;
+					continue;
+				}
+				
 				error = fabs(matrix[y * dimension + x] - cuda[y * dimension + x]);
 				
-				if (error > threshold || std::isnan(error)) {
+				
+				if (error > threshold) {
 					errc++;
 					if (maxerr < error) {
-						maxerr = error / matrix[y * dimension + x];
+						maxerr = error;
+						xmax = x;
+						ymax = y;
 					}
-					if (minerr > error) minerr = error / matrix[y * dimension + x];
+					if (minerr > error) minerr = error;
 				}
 				
 			}
 		}
-		printf("CUDA #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
+		printf("CUDA #err: %d - minerr:%04f - maxerr:%04f   isnan: %d | %d %d\n", errc, minerr, maxerr, isnan, xmax, ymax);
 	}
+	errc = 0;
+	minerr = 10000000000000000.;
+	maxerr = threshold;
+	int xmax, ymax;
 	
+	for (int y = 0; y < dimension; y++) {
+		for (int x = 0; x < dimension; x++) {
+			if(std::isnan(cudares[y * dimension + x])) {
+				isnan++;
+				continue;
+			}
+			
+			error = fabs(openaccres[y * dimension + x] - cudares[y * dimension + x]);
+			
+			if (error > 1. && y != 33) {
+				printf("wierd error %04f at %d %d\n", error, x, y);
+			}
+			
+			if (error > threshold) {
+				errc++;
+				if (maxerr < error) {
+					printf("%04f at %d %d\n", error, x, y);
+					maxerr = error;
+					xmax = x;
+					ymax = y;
+				}
+				if (minerr > error) minerr = error;
+			}
+			
+		}
+	}
+	printf("CUDA VS OPENACC #err: %d - minerr:%04f - maxerr:%04f   isnan: %d | %d %d\n", errc, minerr, maxerr, isnan, xmax, ymax);
+
 	/*for (int y = 0; y < dimension; y++) {
 		for (int x = 0; x < dimension; x++) {
 			error = fabs(cuda[y * dimension + x] - openacc[y * dimension + x]);

@@ -9,18 +9,18 @@ exit(0); \
 }                                                                 \
 }
 
-void print_matrix(float *matrix, float *iden, int dim) {
-	/*for (int i = 0; i < dim; i++) {
-		for (int j = 0; j < dim; j++) {
+__host__ __device__ void print_matrix(float *matrix, float *iden, int dim) {
+	for (int i = 33; i < 34; i++) {
+		for (int j = 0; j < 18; j++) {
 			printf("%2f ", matrix[i * dim + j]);
 		}
 		printf("\t\t");
-		for (int j = 0; j < dim; j++) {
+		for (int j = 0; j < 18; j++) {
 			printf("%2f ", iden[i * dim + j]);
 		}
 		printf("\n");
 	}
-	printf("\n");*/
+	printf("\n");
 }
 
 
@@ -70,13 +70,12 @@ void openacc_offload(float *matrix, float *iden, int dim) {
 				}
 			}
 		}
-		
 	}
 }
 
 
 __global__ void normalize(float *matrix, float *iden, int iter, int dim, float divisor) {
-	int x = iter + blockDim.x * blockIdx.x + threadIdx.x;
+	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	if (x >= 2 * dim)
 		return;
 	
@@ -86,7 +85,10 @@ __global__ void normalize(float *matrix, float *iden, int iter, int dim, float d
 	else if (x < 2 * dim) {
 		iden[iter * dim + x - dim] /= divisor;
 	}
-	__syncthreads();
+	if(x == 0) {
+		//printf("%04f - %04f * %04f -> ", iden[y * dim + x - dim], iden[iter * dim + x - dim], factor);
+		//print_matrix(matrix, iden, dim);
+	}
 }
 
 
@@ -103,52 +105,19 @@ __global__ void gauss(float *matrix, float *iden, int iter, int dim) {
 	} else {
 		iden[y * dim + x - dim] -= iden[iter * dim + x - dim] * factor;
 	}
-	__syncthreads();
+	
+	//cudaDeviceSynchronize();
+
+	if(x == 0 && y == 0) {
+		//print_matrix(matrix, iden, dim);
+		//printf("%04f - %04f * %04f -> ", iden[y * dim + x - dim], iden[iter * dim + x - dim], factor);
+	}
 }
 
 
-void cuda_offload(float *matrix, float *iden, int dim) {
-	float *h_A = matrix;
-	float *h_I = iden;
-	float *d_A, *d_I;
-	
-	// setup and copy matrices to gpu
-	cudaMalloc(&d_A, dim * dim * sizeof(float));
-	cudaMalloc(&d_I, dim * dim * sizeof(float));
-	cudaCheckErrors();
-	cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
-	cudaCheckErrors();
-	/*for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			printf("%2f ", h_A[i*dim+j]);
-		}
-		printf("\t\t");
-		for (int j = 0; j < 4; j++) {
-			printf("%2f ", h_I[i*dim+j]);
-		}
-		printf("\n");
-	}
-	printf("\n--------------------------------\n\n");*/
-	
-	// setup kernelsizes
-	
-	//TODO: ERROR (NAN) WHEN row_parts > 2!!
-	//automatically happens when matrix dim is > 1024
-	//can be forced on lower dims too.
-	
-	int row_parts = (dim + 1 > 1024) ? std::ceil((dim + 1.) / 1024.) : 1;
-	int max_row = std::ceil((dim + 1.) / row_parts);
-	dim3 norm_block(max_row);
-	dim3 norm_grid(row_parts);
-	row_parts = (2 * dim > 1024) ? std::ceil(2 * dim / 1024.) : 1;
-	max_row = std::ceil(2. * dim / row_parts);
-	dim3 gauss_block(max_row);
-	dim3 gauss_grid(row_parts, dim);
-	
-	cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-	
+/*__device__ cuda_kernel(float *matrix, float *iden, int dim) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) { // swap lines if 0
@@ -165,23 +134,119 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 		
 		//cudaMemcpy(&h_A[iter * dim + iter], &d_A[iter * dim + iter], sizeof(float), cudaMemcpyDeviceToHost);
 		//normalize
+		float divisor = matrix[iter * dim + iter];
+		
+		if (y == 0) {
+			if (x < dim)
+				matrix[iter * dim + x] /= divisor;
+			else if (x < 2 * dim) {
+				iden[iter * dim + x - dim] /= divisor;
+			}
+		}
+		
 		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim, h_A[iter * dim + iter]);
-		//cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//print_matrix(h_A, h_I, dim);
+		cudaDeviceSynchronize();
+		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		print_matrix(h_A, h_I, dim);
 		cudaCheckErrors();
 		
 		//gauss
 		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
-		//cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//print_matrix(h_A, h_I, dim);
+		cudaDeviceSynchronize();
+		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		print_matrix(h_A, h_I, dim);
+		cudaCheckErrors();
+	}
+	cudaCheckErrors();
+}*/
+
+
+void cuda_offload(float *matrix, float *iden, int dim) {
+	float *d_A, *d_I;
+	
+	// setup and copy matrices to gpu
+	cudaMalloc(&d_A, dim * dim * sizeof(float));
+	cudaMalloc(&d_I, dim * dim * sizeof(float));
+	cudaMemcpy(d_A, matrix, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_I, iden, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+	cudaCheckErrors();
+
+	
+	// setup kernelsizes
+	
+	//TODO: ERROR WHEN row_parts > 2 and matrix dim > 481!!
+	//automatically happens when matrix dim is > 1024
+	//can be forced on lower dims too e.g 481 (480 works fine).
+	
+	int row_parts = 3;//(dim + 1 > 1024) ? std::ceil((dim + 1.) / 1024.) : 1;
+	int max_row = std::ceil((2. * (dim + 1.)) / row_parts);
+	dim3 norm_block(max_row);
+	dim3 norm_grid(row_parts);
+	row_parts = 3;//(2 * dim > 1024) ? std::ceil(2 * dim / 1024.) : 1;
+	max_row = std::ceil(2. * dim / row_parts);
+	dim3 gauss_block(max_row);
+	dim3 gauss_grid(row_parts, dim);
+	
+	for (int iter = 0; iter < dim; iter++) {
+		if (matrix[iter * dim + iter] == 0) { // swap lines if 0 -> divide by 0 is impossible
+			for (int j = iter + 1; j < dim; j++) { // find new line
+				if (matrix[j * dim + iter] != 0) {
+					for (int x = iter; x < dim; x++) { // swap lines
+						matrix[iter * dim + x] += matrix[j * dim + x];
+						iden[iter * dim + x] += iden[j * dim + x];
+					}
+					break;
+				}
+			}
+		}
+		//cudaDeviceSynchronize();
+		cudaMemcpy(&matrix[iter * dim + iter], &d_A[iter * dim + iter], sizeof(float), cudaMemcpyDeviceToHost);
+		if (matrix[iter * dim + iter] == 0.0f) {
+			printf("error at iter %d\n", iter);
+			break;
+		}
+		//normalize
+		//cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+		//cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim, matrix[iter * dim + iter]);
+		cudaDeviceSynchronize();
+		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		print_matrix(h_A, h_I, dim);*/
+		cudaCheckErrors();
+		
+		//gauss
+		//cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+		//cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
+		cudaDeviceSynchronize();
+		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		print_matrix(h_A, h_I, dim);*/
 		cudaCheckErrors();
 	}
 	cudaCheckErrors();
 	
 	// Copy results back to host
-	cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-	//print_matrix(h_A, h_I, dim);
+	cudaDeviceSynchronize();
+	cudaCheckErrors();
+	cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaFree(d_A);
+	cudaFree(d_I);
+	cudaCheckErrors();
+	//print_matrix(matrix, iden, dim);
+	/*for (int i = 0; i < 4; i++) {
+		for (int j = 0; j < 4; j++) {
+			printf("%2f ", h_A[i*dim+j]);
+		}
+		printf("\t\t");
+		for (int j = 0; j < 4; j++) {
+			printf("%2f ", h_I[i*dim+j]);
+		}
+		printf("\n");
+	}
+	printf("\n");*/
 }
