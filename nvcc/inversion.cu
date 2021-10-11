@@ -10,12 +10,12 @@ exit(0); \
 }
 
 __host__ __device__ void print_matrix(float *matrix, float *iden, int dim) {
-	for (int i = 33; i < 34; i++) {
-		for (int j = 0; j < 18; j++) {
+	for (int i = 0; i < dim; i++) {
+		for (int j = 0; j < dim; j++) {
 			printf("%2f ", matrix[i * dim + j]);
 		}
 		printf("\t\t");
-		for (int j = 0; j < 18; j++) {
+		for (int j = 0; j < dim; j++) {
 			printf("%2f ", iden[i * dim + j]);
 		}
 		printf("\n");
@@ -75,29 +75,30 @@ void openacc_offload(float *matrix, float *iden, int dim) {
 
 
 __global__ void normalize(float *matrix, float *iden, int iter, int dim, float divisor) {
-	int x = blockDim.x * blockIdx.x + threadIdx.x;
+	int x = iter + blockDim.x * blockIdx.x + threadIdx.x;
 	if (x >= 2 * dim)
 		return;
 	
 	//float factor = matrix[iter * dim + iter];
 	if (x < dim)
 		matrix[iter * dim + x] /= divisor;
-	else if (x < 2 * dim) {
+	else {
 		iden[iter * dim + x - dim] /= divisor;
 	}
-	if(x == 0) {
-		//printf("%04f - %04f * %04f -> ", iden[y * dim + x - dim], iden[iter * dim + x - dim], factor);
+	if (x == 7) {
+		//printf("%04f / %04f = %04f\n", iden[iter * dim + x - dim] * divisor, divisor, iden[iter * dim + x - dim]);
 		//print_matrix(matrix, iden, dim);
 	}
 }
 
 
 __global__ void gauss(float *matrix, float *iden, int iter, int dim) {
-	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int x = iter + blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	y = (y >= iter) ? y + 1 : y;
 	
 	float factor = matrix[y * dim + iter];
-	if (x >= 2 * dim || y >= dim || factor == 0.0f || y == iter)
+	if (x >= 2 * dim || y >= dim || factor == 0.0f || x == iter)
 		return;
 	
 	if (x < dim) {
@@ -107,11 +108,20 @@ __global__ void gauss(float *matrix, float *iden, int iter, int dim) {
 	}
 	
 	//cudaDeviceSynchronize();
-
-	if(x == 0 && y == 0) {
+	
+	//if (x == 0 && y == 0) {
 		//print_matrix(matrix, iden, dim);
 		//printf("%04f - %04f * %04f -> ", iden[y * dim + x - dim], iden[iter * dim + x - dim], factor);
-	}
+	//}
+}
+
+__global__ void gauss_fix(float *matrix, int iter, int dim) {
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	
+	if (y >= dim || y == iter)
+		return;
+	
+	matrix[y * dim + iter] = 0;
 }
 
 
@@ -172,22 +182,24 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 	cudaMemcpy(d_A, matrix, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_I, iden, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 	cudaCheckErrors();
-
 	
 	// setup kernelsizes
 	
-	//TODO: ERROR WHEN row_parts > 2 and matrix dim > 481!!
-	//automatically happens when matrix dim is > 1024
-	//can be forced on lower dims too e.g 481 (480 works fine).
+	int rowp = 3;
 	
-	int row_parts = 3;//(dim + 1 > 1024) ? std::ceil((dim + 1.) / 1024.) : 1;
-	int max_row = std::ceil((2. * (dim + 1.)) / row_parts);
-	dim3 norm_block(max_row);
-	dim3 norm_grid(row_parts);
-	row_parts = 3;//(2 * dim > 1024) ? std::ceil(2 * dim / 1024.) : 1;
-	max_row = std::ceil(2. * dim / row_parts);
-	dim3 gauss_block(max_row);
-	dim3 gauss_grid(row_parts, dim);
+	int threadsperblock = 128;
+	int blocks = std::ceil((dim + 1.) / threadsperblock);
+	
+	dim3 norm_block(threadsperblock);
+	dim3 norm_grid(blocks);
+	
+	
+	dim3 gauss_block(threadsperblock);
+	dim3 gauss_grid(1, dim - 1);
+	
+	blocks = std::ceil(static_cast<float>(dim) / threadsperblock);
+	dim3 gauss_fix_block(1, threadsperblock);
+	dim3 gauss_fix_grid(1, blocks);
 	
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) { // swap lines if 0 -> divide by 0 is impossible
@@ -212,19 +224,21 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 		//cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim, matrix[iter * dim + iter]);
 		cudaDeviceSynchronize();
-		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		print_matrix(h_A, h_I, dim);*/
+		/*cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		print_matrix(matrix, iden, dim);*/
 		cudaCheckErrors();
 		
 		//gauss
 		//cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 		//cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
+		cudaCheckErrors();
+		gauss_fix<<<gauss_fix_grid, gauss_fix_block>>>(d_A, iter, dim);
 		cudaDeviceSynchronize();
-		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		print_matrix(h_A, h_I, dim);*/
+		/*cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		print_matrix(matrix, iden, dim);*/
 		cudaCheckErrors();
 	}
 	cudaCheckErrors();

@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
 		start = std::chrono::high_resolution_clock::now();
 		openacc_offload(openacc, openaccres, dimension);
 		end = std::chrono::high_resolution_clock::now();
-		//openacc_offload(openaccres, openacc, dimension);
+		openacc_offload(openaccres, openacc, dimension);
 		
 		std::chrono::duration<float> openacc_offload_time = end - start;
 		
@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
 		start = std::chrono::high_resolution_clock::now();
 		cuda_offload(cuda, cudares, dimension);
 		end = std::chrono::high_resolution_clock::now();
-		//cuda_offload(cudares, cuda, dimension);
+		cuda_offload(cudares, cuda, dimension);
 		
 		std::chrono::duration<float> cuda_time = end - start;
 		printf("CUDA: %04f\n", cuda_time.count());
@@ -140,7 +140,7 @@ int main(int argc, char *argv[]) {
 		}
 		printf("CUDA #err: %d - minerr:%04f - maxerr:%04f   isnan: %d | %d %d\n", errc, minerr, maxerr, isnan, xmax, ymax);
 	}
-	errc = 0;
+	/*errc = 0;
 	minerr = 10000000000000000.;
 	maxerr = threshold;
 	int xmax, ymax;
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
 			error = fabs(openaccres[y * dimension + x] - cudares[y * dimension + x]);
 			
 			if (error > 1. && y != 33) {
-				printf("wierd error %04f at %d %d\n", error, x, y);
+				//printf("wierd error %04f at %d %d\n", error, x, y);
 			}
 			
 			if (error > threshold) {
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
 			
 		}
 	}
-	printf("CUDA VS OPENACC #err: %d - minerr:%04f - maxerr:%04f   isnan: %d | %d %d\n", errc, minerr, maxerr, isnan, xmax, ymax);
+	printf("CUDA VS OPENACC #err: %d - minerr:%04f - maxerr:%04f   isnan: %d | %d %d\n", errc, minerr, maxerr, isnan, xmax, ymax);*/
 
 	/*for (int y = 0; y < dimension; y++) {
 		for (int x = 0; x < dimension; x++) {
