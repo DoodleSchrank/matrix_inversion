@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <CL/cl.hpp>
 #include "cuda_runtime.h"
 
 #define cudaCheckErrors() {                                          \
@@ -9,18 +10,23 @@ exit(0); \
 }                                                                 \
 }
 
-__host__ __device__ void print_matrix(float *matrix, float *iden, int dim) {
-	for (int i = 0; i < dim; i++) {
-		for (int j = 0; j < dim; j++) {
+__host__ __device__ void
+print_matrix(float *matrix, float *iden, int dim, int xto, int yto, int xfrom = 0, int yfrom = 0) {
+	for (int i = yfrom; i < yto; i++) {
+		for (int j = xfrom; j < xto; j++) {
 			printf("%2f ", matrix[i * dim + j]);
 		}
 		printf("\t\t");
-		for (int j = 0; j < dim; j++) {
+		for (int j = xfrom; j < xto; j++) {
 			printf("%2f ", iden[i * dim + j]);
 		}
 		printf("\n");
 	}
 	printf("\n");
+}
+
+__host__ __device__ void print_matrix(float *matrix, float *iden, int dim, int xfrom = 0, int yfrom = 0) {
+	print_matrix(matrix, iden, dim, dim, dim, xfrom, yfrom);
 }
 
 
@@ -74,45 +80,37 @@ void openacc_offload(float *matrix, float *iden, int dim) {
 }
 
 
-__global__ void normalize(float *matrix, float *iden, int iter, int dim, float divisor) {
-	int x = iter + blockDim.x * blockIdx.x + threadIdx.x;
+__global__ void normalize(float *matrix, float *iden, int iter, int dim) {
+	int x = 1 + iter + blockDim.x * blockIdx.x + threadIdx.x;
 	if (x >= 2 * dim)
 		return;
 	
-	//float factor = matrix[iter * dim + iter];
+	
 	if (x < dim)
-		matrix[iter * dim + x] /= divisor;
-	else {
-		iden[iter * dim + x - dim] /= divisor;
-	}
-	if (x == 7) {
-		//printf("%04f / %04f = %04f\n", iden[iter * dim + x - dim] * divisor, divisor, iden[iter * dim + x - dim]);
-		//print_matrix(matrix, iden, dim);
-	}
+		matrix[iter * dim + x] /= matrix[iter * dim + iter];
+	else
+		iden[iter * dim + x - dim] /= matrix[iter * dim + iter];
 }
 
-
 __global__ void gauss(float *matrix, float *iden, int iter, int dim) {
-	int x = iter + blockIdx.x * blockDim.x + threadIdx.x;
-	int y = blockIdx.y * blockDim.y + threadIdx.y;
-	y = (y >= iter) ? y + 1 : y;
+	int iterations_per_thread = std::ceil((dim + 1.) / 128.);
+	int x = 1 + iter + threadIdx.x * iterations_per_thread;
 	
-	float factor = matrix[y * dim + iter];
-	if (x >= 2 * dim || y >= dim || factor == 0.0f || x == iter)
+	if (x >= 2 * dim)
 		return;
 	
-	if (x < dim) {
-		matrix[y * dim + x] -= matrix[iter * dim + x] * factor;
-	} else {
-		iden[y * dim + x - dim] -= iden[iter * dim + x - dim] * factor;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if (y >= iter) y++;
+	float factor = matrix[y * dim + iter];
+	
+	for (; x <= iter + (threadIdx.x + 1) * iterations_per_thread && x <= iter + dim; x++) {
+		if (x < dim)
+			matrix[y * dim + x] -= matrix[iter * dim + x] * factor;
+		else
+			iden[(y - 1) * dim + x] -= iden[(iter - 1) * dim + x] * factor;
 	}
 	
-	//cudaDeviceSynchronize();
-	
-	//if (x == 0 && y == 0) {
-		//print_matrix(matrix, iden, dim);
-		//printf("%04f - %04f * %04f -> ", iden[y * dim + x - dim], iden[iter * dim + x - dim], factor);
-	//}
+	matrix[y * dim + iter] = 0;
 }
 
 __global__ void gauss_fix(float *matrix, int iter, int dim) {
@@ -123,54 +121,6 @@ __global__ void gauss_fix(float *matrix, int iter, int dim) {
 	
 	matrix[y * dim + iter] = 0;
 }
-
-
-/*__device__ cuda_kernel(float *matrix, float *iden, int dim) {
-	int x = blockIdx.x * blockDim.x + threadIdx.x;
-	int y = blockIdx.y * blockDim.y + threadIdx.y;
-	
-	for (int iter = 0; iter < dim; iter++) {
-		if (matrix[iter * dim + iter] == 0) { // swap lines if 0
-			for (int j = iter + 1; j < dim; j++) { // find new line
-				if (matrix[j * dim + iter] != 0) {
-					for (int x = iter; x < dim; x++) { // swap lines
-						matrix[iter * dim + x] += matrix[j * dim + x];
-						iden[iter * dim + x] += iden[j * dim + x];
-					}
-					break;
-				}
-			}
-		}
-		
-		//cudaMemcpy(&h_A[iter * dim + iter], &d_A[iter * dim + iter], sizeof(float), cudaMemcpyDeviceToHost);
-		//normalize
-		float divisor = matrix[iter * dim + iter];
-		
-		if (y == 0) {
-			if (x < dim)
-				matrix[iter * dim + x] /= divisor;
-			else if (x < 2 * dim) {
-				iden[iter * dim + x - dim] /= divisor;
-			}
-		}
-		
-		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim, h_A[iter * dim + iter]);
-		cudaDeviceSynchronize();
-		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		print_matrix(h_A, h_I, dim);
-		cudaCheckErrors();
-		
-		//gauss
-		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
-		cudaDeviceSynchronize();
-		/*cudaMemcpy(h_I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_A, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		print_matrix(h_A, h_I, dim);
-		cudaCheckErrors();
-	}
-	cudaCheckErrors();
-}*/
 
 
 void cuda_offload(float *matrix, float *iden, int dim) {
@@ -185,10 +135,8 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 	
 	// setup kernelsizes
 	
-	int rowp = 3;
-	
 	int threadsperblock = 128;
-	int blocks = std::ceil((dim + 1.) / threadsperblock);
+	int blocks = std::ceil(static_cast<float>(dim) / threadsperblock);
 	
 	dim3 norm_block(threadsperblock);
 	dim3 norm_grid(blocks);
@@ -197,7 +145,6 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 	dim3 gauss_block(threadsperblock);
 	dim3 gauss_grid(1, dim - 1);
 	
-	blocks = std::ceil(static_cast<float>(dim) / threadsperblock);
 	dim3 gauss_fix_block(1, threadsperblock);
 	dim3 gauss_fix_grid(1, blocks);
 	
@@ -213,33 +160,29 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 				}
 			}
 		}
-		//cudaDeviceSynchronize();
-		cudaMemcpy(&matrix[iter * dim + iter], &d_A[iter * dim + iter], sizeof(float), cudaMemcpyDeviceToHost);
-		if (matrix[iter * dim + iter] == 0.0f) {
-			printf("error at iter %d\n", iter);
-			break;
-		}
+		
 		//normalize
-		//cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
-		//cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
-		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim, matrix[iter * dim + iter]);
+		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
 		cudaDeviceSynchronize();
-		/*cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		print_matrix(matrix, iden, dim);*/
+		cudaCheckErrors();
+		matrix[iter * dim + iter] = 1;
+		cudaMemcpy(&d_A[iter * dim + iter], &matrix[iter * dim + iter], sizeof(float), cudaMemcpyHostToDevice);
+		//cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		//cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		//print_matrix(matrix, iden, dim);
 		cudaCheckErrors();
 		
 		//gauss
-		//cudaMemcpy(d_I, h_I, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
-		//cudaMemcpy(d_A, h_A, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
 		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
+		cudaDeviceSynchronize();
 		cudaCheckErrors();
+		
 		gauss_fix<<<gauss_fix_grid, gauss_fix_block>>>(d_A, iter, dim);
 		cudaDeviceSynchronize();
-		/*cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		print_matrix(matrix, iden, dim);*/
-		cudaCheckErrors();
+		//cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		//cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+		//print_matrix(matrix, iden, dim);
+		//cudaCheckErrors();
 	}
 	cudaCheckErrors();
 	
@@ -251,16 +194,5 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 	cudaFree(d_A);
 	cudaFree(d_I);
 	cudaCheckErrors();
-	//print_matrix(matrix, iden, dim);
-	/*for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			printf("%2f ", h_A[i*dim+j]);
-		}
-		printf("\t\t");
-		for (int j = 0; j < 4; j++) {
-			printf("%2f ", h_I[i*dim+j]);
-		}
-		printf("\n");
-	}
-	printf("\n");*/
 }
+
