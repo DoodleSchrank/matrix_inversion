@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <CL/cl.hpp>
 #include "cuda_runtime.h"
 
 #define cudaCheckErrors() {                                          \
@@ -93,33 +92,35 @@ __global__ void normalize(float *matrix, float *iden, int iter, int dim) {
 }
 
 __global__ void gauss(float *matrix, float *iden, int iter, int dim) {
-	int iterations_per_thread = std::ceil((dim + 1.) / 128.);
-	int x = 1 + iter + threadIdx.x * iterations_per_thread;
-	
-	if (x >= 2 * dim)
-		return;
+	//int iterations_per_thread = std::ceil((dim + 1.) / 128.);
+	int x = 1 + iter + blockIdx.x * blockDim.x + threadIdx.x;// * iterations_per_thread;
 	
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
-	if (y >= iter) y++;
+	if (x >= 2 * dim || y == iter)
+		return;
+	
+	//if (y >= iter) y++;
 	float factor = matrix[y * dim + iter];
 	
-	for (; x <= iter + (threadIdx.x + 1) * iterations_per_thread && x <= iter + dim; x++) {
+	//for (; x <= iter + (threadIdx.x + 1) * iterations_per_thread && x <= iter + dim; x++) {
 		if (x < dim)
 			matrix[y * dim + x] -= matrix[iter * dim + x] * factor;
 		else
-			iden[(y - 1) * dim + x] -= iden[(iter - 1) * dim + x] * factor;
-	}
+			iden[y * dim + x - dim] -= iden[iter * dim + x - dim] * factor;
+	//}
 	
-	matrix[y * dim + iter] = 0;
+	//matrix[y * dim + iter] = 0;
 }
 
 __global__ void gauss_fix(float *matrix, int iter, int dim) {
-	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	//int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	
-	if (y >= dim || y == iter)
+	if (x >= dim || x == iter)
 		return;
 	
-	matrix[y * dim + iter] = 0;
+	//matrix[y * dim + iter] = 0;
+	matrix[x * dim + iter] = 0;
 }
 
 
@@ -135,18 +136,17 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 	
 	// setup kernelsizes
 	
-	int threadsperblock = 128;
-	int blocks = std::ceil(static_cast<float>(dim) / threadsperblock);
+	struct cudaDeviceProp properties;
+	cudaGetDeviceProperties(&properties, 0);
 	
-	dim3 norm_block(threadsperblock);
-	dim3 norm_grid(blocks);
-	
-	
-	dim3 gauss_block(threadsperblock);
-	dim3 gauss_grid(1, dim - 1);
-	
-	dim3 gauss_fix_block(1, threadsperblock);
-	dim3 gauss_fix_grid(1, blocks);
+	int row_parts = (dim + 1 > properties.maxThreadsPerBlock) ? std::ceil((dim + 1.) / properties.maxThreadsPerBlock) : 1;
+	int max_row = std::ceil((dim + 1.) / row_parts);
+	dim3 norm_block(max_row);
+	dim3 norm_grid(row_parts);
+	row_parts = (2 * dim > properties.maxThreadsPerBlock) ? std::ceil(2. * dim / properties.maxThreadsPerBlock) : 1;
+	max_row = std::ceil(2. * dim / row_parts);
+	dim3 gauss_block(max_row);
+	dim3 gauss_grid(row_parts, dim);
 	
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) { // swap lines if 0 -> divide by 0 is impossible
@@ -167,22 +167,14 @@ void cuda_offload(float *matrix, float *iden, int dim) {
 		cudaCheckErrors();
 		matrix[iter * dim + iter] = 1;
 		cudaMemcpy(&d_A[iter * dim + iter], &matrix[iter * dim + iter], sizeof(float), cudaMemcpyHostToDevice);
-		//cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//print_matrix(matrix, iden, dim);
 		cudaCheckErrors();
 		
 		//gauss
 		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
 		cudaDeviceSynchronize();
-		cudaCheckErrors();
-		
-		gauss_fix<<<gauss_fix_grid, gauss_fix_block>>>(d_A, iter, dim);
+		gauss_fix<<<norm_grid, norm_block>>>(d_A, iter, dim);
 		cudaDeviceSynchronize();
-		//cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
-		//print_matrix(matrix, iden, dim);
-		//cudaCheckErrors();
+		cudaCheckErrors();
 	}
 	cudaCheckErrors();
 	

@@ -1,6 +1,91 @@
 #include <omp.h>
 #include <stdio.h>
 #include <array>
+//#include <CL/opencl.h>
+#include <stdlib.h>
+#include <err.h>
+
+void print_matrix(float *matrix, float *iden, int dim) {
+	for (int i = 0; i < dim; i++) {
+		for (int j = 0; j < dim; j++) {
+			printf("%2f ", matrix[i * dim + j]);
+		}
+		printf("\t\t");
+		for (int j = 0; j < dim; j++) {
+			printf("%2f ", iden[i * dim + j]);
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+/*#define CaseReturnString(x) case x: return #x;
+
+char *opencl_errstr(cl_int err)
+{
+	switch (err)
+	{
+		CaseReturnString(CL_SUCCESS                        )
+		CaseReturnString(CL_DEVICE_NOT_FOUND               )
+		CaseReturnString(CL_DEVICE_NOT_AVAILABLE           )
+		CaseReturnString(CL_COMPILER_NOT_AVAILABLE         )
+		CaseReturnString(CL_MEM_OBJECT_ALLOCATION_FAILURE  )
+		CaseReturnString(CL_OUT_OF_RESOURCES               )
+		CaseReturnString(CL_OUT_OF_HOST_MEMORY             )
+		CaseReturnString(CL_PROFILING_INFO_NOT_AVAILABLE   )
+		CaseReturnString(CL_MEM_COPY_OVERLAP               )
+		CaseReturnString(CL_IMAGE_FORMAT_MISMATCH          )
+		CaseReturnString(CL_IMAGE_FORMAT_NOT_SUPPORTED     )
+		CaseReturnString(CL_BUILD_PROGRAM_FAILURE          )
+		CaseReturnString(CL_MAP_FAILURE                    )
+		CaseReturnString(CL_MISALIGNED_SUB_BUFFER_OFFSET   )
+		CaseReturnString(CL_COMPILE_PROGRAM_FAILURE        )
+		CaseReturnString(CL_LINKER_NOT_AVAILABLE           )
+		CaseReturnString(CL_LINK_PROGRAM_FAILURE           )
+		CaseReturnString(CL_DEVICE_PARTITION_FAILED        )
+		CaseReturnString(CL_KERNEL_ARG_INFO_NOT_AVAILABLE  )
+		CaseReturnString(CL_INVALID_VALUE                  )
+		CaseReturnString(CL_INVALID_DEVICE_TYPE            )
+		CaseReturnString(CL_INVALID_PLATFORM               )
+		CaseReturnString(CL_INVALID_DEVICE                 )
+		CaseReturnString(CL_INVALID_CONTEXT                )
+		CaseReturnString(CL_INVALID_QUEUE_PROPERTIES       )
+		CaseReturnString(CL_INVALID_COMMAND_QUEUE          )
+		CaseReturnString(CL_INVALID_HOST_PTR               )
+		CaseReturnString(CL_INVALID_MEM_OBJECT             )
+		CaseReturnString(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR)
+		CaseReturnString(CL_INVALID_IMAGE_SIZE             )
+		CaseReturnString(CL_INVALID_SAMPLER                )
+		CaseReturnString(CL_INVALID_BINARY                 )
+		CaseReturnString(CL_INVALID_BUILD_OPTIONS          )
+		CaseReturnString(CL_INVALID_PROGRAM                )
+		CaseReturnString(CL_INVALID_PROGRAM_EXECUTABLE     )
+		CaseReturnString(CL_INVALID_KERNEL_NAME            )
+		CaseReturnString(CL_INVALID_KERNEL_DEFINITION      )
+		CaseReturnString(CL_INVALID_KERNEL                 )
+		CaseReturnString(CL_INVALID_ARG_INDEX              )
+		CaseReturnString(CL_INVALID_ARG_VALUE              )
+		CaseReturnString(CL_INVALID_ARG_SIZE               )
+		CaseReturnString(CL_INVALID_KERNEL_ARGS            )
+		CaseReturnString(CL_INVALID_WORK_DIMENSION         )
+		CaseReturnString(CL_INVALID_WORK_GROUP_SIZE        )
+		CaseReturnString(CL_INVALID_WORK_ITEM_SIZE         )
+		CaseReturnString(CL_INVALID_GLOBAL_OFFSET          )
+		CaseReturnString(CL_INVALID_EVENT_WAIT_LIST        )
+		CaseReturnString(CL_INVALID_EVENT                  )
+		CaseReturnString(CL_INVALID_OPERATION              )
+		CaseReturnString(CL_INVALID_GL_OBJECT              )
+		CaseReturnString(CL_INVALID_BUFFER_SIZE            )
+		CaseReturnString(CL_INVALID_MIP_LEVEL              )
+		CaseReturnString(CL_INVALID_GLOBAL_WORK_SIZE       )
+		CaseReturnString(CL_INVALID_PROPERTY               )
+		CaseReturnString(CL_INVALID_IMAGE_DESCRIPTOR       )
+		CaseReturnString(CL_INVALID_COMPILER_OPTIONS       )
+		CaseReturnString(CL_INVALID_LINKER_OPTIONS         )
+		CaseReturnString(CL_INVALID_DEVICE_PARTITION_COUNT )
+		default: return "Unknown OpenCL error code";
+	}
+}*/
+
 
 void single_cpu(float *matrix, float *iden, int dim) {
 	for (int i = 0; i < dim; i++) {
@@ -93,103 +178,57 @@ void openmp_offload(float *matrix, float *iden, int dim) {
 //#pragma omp target exit data map(from: matrix[0:dim*dim], iden[0:dim*dim])
 }
 
-int bound(int coord) {
-	if (coord > 2) return 0;
-	
-	if (coord < 0) return 2;
-	
-	return coord;
-}
 
-float det3x3(float **matrix) {
-	float det = 0;
-	float diagonal = 0;
-	int x = 0, y = 0;
-	
-	for (int i = 0; i < 3; i++) {
-		diagonal = matrix[x][y];
-		for (int j = 1; j < 3; j++) {
-			x = bound(x++);
-			y = bound(y++);
-			diagonal *= matrix[x][y];
-		}
-		x = bound(x++);
-		det += diagonal;
-	}
-	
-	for (int i = 0; i < 3; i++) {
-		diagonal = matrix[x][y];
+/*#define CL_TARGET_OPENCL_VERSION 300
+
+const char *normalize_str =
+		"__kernel void normalize_matrix(\n"
+		"__global float *matrix,\n"
+		"__global float *iden,\n"
+		"int dim,\n"
+		"int iter) {\n"
+		"int x = get_global_id(0);\n"
+		"if (x >= 2 * dim){\n"
+		"   return;}\n"
+		"if (x < dim){\n"
+		"   matrix[iter * dim + x] /= matrix[iter * dim + iter];\n"
+		"} else {\n"
+		"   iden[iter * dim + x - dim] /= matrix[iter * dim + iter];}\n"
+		"}";
+
+const char *gauss_str =
+		"__kernel void gauss(\n"
+		"		__global float *matrix,\n"
+		"		__global float *iden,\n"
+		"		int dim,\n"
+		"		int iter) {\n"
+		"int x = get_global_id(0);\n"
 		
-		for (int j = 1; j < 3; j++) {
-			x = bound(x--);
-			y = bound(y++);
-			diagonal *= matrix[x][y];
-		}
-		x = bound(x--);
-		det -= diagonal;
-	}
-	return det;
-}
+		"int y = get_global_id(1);\n"
+		"if (x >= 2 * dim || y == iter)\n"
+		"return;\n"
+		
+		"float factor = matrix[y * dim + iter];\n"
+		
+		"if (x < dim)\n"
+		"matrix[y * dim + x] -= matrix[iter * dim + x] * factor;\n"
+		"else\n"
+		"iden[y * dim + x - dim] -= iden[iter * dim + x - dim] * factor;\n"
+		"}";
 
-
-void adjugate(float **matrix) {
-	std::array<float[3][3], 16> subarrays;
-	
-	int overx = 0;
-	int overy = 0;
-	
-	for (int y = 0; y < 4; y++) {
-		for (int x = 0; x < 4; x++) {
-			auto arr = subarrays.at(y * dim + x);
-			for (int yi = 0; yi < 4; yi++) {
-				if (yi == y) {
-					overy--;
-					continue;
-				}
-				for (int xi = 0; xi < 4; xi++) {
-					if (xi == x) {
-						overx--;
-						continue;
-					}
-					arr[xi + overx][yi + overy] = matrix[xi][yi];
-				}
-				overx++;
-			}
-			overy++;
-		}
-	}
-	
-	
-	float det = matrix[0][0] *
-	            det3x3(subarrays.at(0)) - matrix[1][0] *
-	            det3x3(subarrays.at(1)) + matrix[2][0] *
-	            det3x3(subarrays.at(2)) - matrix[3][0] *
-	            det3x3(subarrays.at(3));
-	float subdet[16];
-	int i = 0;
-	for (float **matrix : subarrays) {
-		i++;
-		matrix[i / 4][i % 4] = (i % 2) ? det / det3x3(matrix) : -det / det3x3(matrix);
-	}
-}
-
-//const char *normalize =
-__kernel void inc(
-		__global float *d_A,
-		__global float *d_I,
-		int dim,
-		int iter) {
-	int i = get_global_id(0);
-	int row = i / dim;
-	int x = i - row * dim;
-	if (row == iter && x >= iter && x < dim + iter + 1) {
-		if (x < dim) {
-			d_A[i] = d_A[i] / d_A[row * dim + iter];
-		} else {
-			d_I[i] = d_I[i] / d_A[row * dim + iter];
-		}
-	}
-}
+const char *gaussfix_str =
+		"__kernel void gaussfix(\n"
+		"		__global float *matrix,\n"
+		"		__global float *iden,\n"
+		"		int dim,\n"
+		"		int iter) {\n"
+		"int x = get_global_id(0);\n"
+		
+		"if (x >= dim || x == iter)\n"
+		"return;\n"
+		
+		"matrix[x * dim + iter] = 0;\n"
+		"}";
 
 
 void opencl_offload(float *matrix, float *iden, int dim) {
@@ -206,8 +245,8 @@ void opencl_offload(float *matrix, float *iden, int dim) {
 	// Obtain the first available device on the platform
 	cl_device_id deviceID = NULL;
 	cl_uint numDevices;
-	errCode = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_DEFAULT, 1,
-							 &deviceID, &numDevices);
+	errCode = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_GPU, 1,
+	                         &deviceID, &numDevices);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clGetDeviceIDs() failed");
 	}
@@ -223,24 +262,17 @@ void opencl_offload(float *matrix, float *iden, int dim) {
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clCreateCommandQueue() failed");
 	}
-	
+	size_t iter = 0;
 	// Allocate memory on the device
 	cl_mem d_A = clCreateBuffer(context, CL_MEM_READ_WRITE, dim * dim * sizeof(float), NULL, &errCode);
-	if (errCode != CL_SUCCESS) {
-		errx(1, "clCreateBuffer() failed");
-	}
 	cl_mem d_I = clCreateBuffer(context, CL_MEM_READ_WRITE, dim * dim * sizeof(float), NULL, &errCode);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clCreateBuffer() failed");
 	}
 	
 	// Copy data from the host to the device
-	errCode = clEnqueueWriteBuffer(commandQueue, d_A, CL_TRUE, 0, dim * dim * sizeof(float), matrix, 0, NULL, NULL);
-	if (errCode != CL_SUCCESS) {
-		errx(1, "clEnqueueWriteBuffer() failed");
-	}
-	// Copy data from the host to the device
-	errCode = clEnqueueWriteBuffer(commandQueue, d_I, CL_TRUE, 0, dim * dim * sizeof(float), iden, 0, NULL, NULL);
+	errCode = clEnqueueWriteBuffer(commandQueue, d_A, CL_FALSE, 0, dim * dim * sizeof(float), matrix, 0, NULL, NULL);
+	errCode |= clEnqueueWriteBuffer(commandQueue, d_I, CL_FALSE, 0, dim * dim * sizeof(float), iden, 0, NULL, NULL);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clEnqueueWriteBuffer() failed");
 	}
@@ -250,50 +282,93 @@ void opencl_offload(float *matrix, float *iden, int dim) {
 	//
 	
 	// Creates a program object for a context, and loads source code specified by text strings into the program object
-	cl_program program = clCreateProgramWithSource(context, 1, &incSource, NULL, &errCode);
+	cl_program normalize_program = clCreateProgramWithSource(context, 1, &normalize_str, NULL, &errCode);
+	cl_program gauss_program = clCreateProgramWithSource(context, 1, &gauss_str, NULL, &errCode);
+	cl_program gaussfix_program = clCreateProgramWithSource(context, 1, &gaussfix_str, NULL, &errCode);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clCreateProgramWithSource() failed");
 	}
 	
 	// Builds (compiles and links) a program executable from the program source
-	errCode = clBuildProgram(program, 1, &deviceID, NULL, NULL, NULL);
+	errCode = clBuildProgram(normalize_program, 1, &deviceID, NULL, NULL, NULL);
+	errCode |= clBuildProgram(gauss_program, 1, &deviceID, NULL, NULL, NULL);
+	errCode |= clBuildProgram(gaussfix_program, 1, &deviceID, NULL, NULL, NULL);
 	if (errCode != CL_SUCCESS) {
 		size_t len;
 		char buffer[2048];
-		clGetProgramBuildInfo(program, deviceID, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-		errx(1, "clBuildProgram() failed:\n%s", buffer);
+		clGetProgramBuildInfo(normalize_program, deviceID, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+		errx(1, "clBuildProgram() gaussfix failed:\n%s", buffer);
 	}
 	
 	// Creates a kernel object
-	cl_kernel kernel = clCreateKernel(program, "inc", &errCode);
+	cl_kernel normalize_kernel = clCreateKernel(normalize_program, "normalize_matrix", &errCode);
+	cl_kernel gauss_kernel = clCreateKernel(gauss_program, "gauss", &errCode);
+	cl_kernel gaussfix_kernel = clCreateKernel(gaussfix_program, "gaussfix", &errCode);
 	if (errCode != CL_SUCCESS) {
+		printf("error: %d,%d\n", errCode, CL_INVALID_KERNEL_NAME);
 		errx(1, "clCreateKernel() failed");
 	}
 	
 	// Set the argument value for a specific argument of a kernel
-	errCode = clSetKernelArg(kernel, 0, sizeof(cl_mem), &a_d);
-	if (errCode != CL_SUCCESS) {
-		errx(1, "clSetKernelArg() failed");
-	}
-	errCode = clSetKernelArg(kernel, 1, sizeof(unsigned int), &size);
+	errCode = clSetKernelArg(normalize_kernel, 0, sizeof(cl_mem), &d_A);
+	errCode |= clSetKernelArg(normalize_kernel, 1, sizeof(cl_mem), &d_I);
+	errCode |= clSetKernelArg(normalize_kernel, 2, sizeof(int), &dim);
+	
+	errCode |= clSetKernelArg(gauss_kernel, 0, sizeof(cl_mem), &d_A);
+	errCode |= clSetKernelArg(gauss_kernel, 1, sizeof(cl_mem), &d_I);
+	errCode |= clSetKernelArg(gauss_kernel, 2, sizeof(int), &dim);
+	
+	errCode |= clSetKernelArg(gaussfix_kernel, 0, sizeof(cl_mem), &d_A);
+	errCode |= clSetKernelArg(gaussfix_kernel, 1, sizeof(cl_mem), &d_I);
+	errCode |= clSetKernelArg(gaussfix_kernel, 2, sizeof(int), &dim);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clSetKernelArg() failed");
 	}
 	
-	// Query the maximum workgroup size
-	size_t local;
-	errCode = clGetKernelWorkGroupInfo(kernel, deviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(local), &local, NULL);
-	if (errCode != CL_SUCCESS) {
-		errx(1, "clGetKernelWorkGroupInfo() failed");
-	}
 	
 	// Enqueues a command to execute a kernel on a device
-	size_t global = size;
-	errCode = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL, &global, &local, 0, NULL, NULL);
-	if (errCode != CL_SUCCESS) {
-		errx(1, "clEnqueueNDRangeKernel() failed");
-	}
+	size_t normalize_threads = ceil(static_cast<size_t>(dim) + 1);
+	size_t gauss_threads[2] = {2 * static_cast<size_t>(dim), static_cast<size_t>(dim) - 1};
 	
+	float one[1] = {1.};
+	
+	for (iter = 0; iter < dim; iter++) {
+		const size_t *itr = &iter;
+		errCode |= clSetKernelArg(normalize_kernel, 3, sizeof(int), &iter);
+		errCode |= clSetKernelArg(gauss_kernel, 3, sizeof(int), &iter);
+		errCode |= clSetKernelArg(gaussfix_kernel, 3, sizeof(int), &iter);
+		
+		errCode = clEnqueueNDRangeKernel(commandQueue, normalize_kernel, 1, itr, &normalize_threads, NULL, 0, NULL,
+		                                 NULL);
+		errCode = clEnqueueReadBuffer(commandQueue, d_A, CL_FALSE, 0, dim * dim * sizeof(float), matrix, 0, NULL, NULL);
+		errCode |= clEnqueueReadBuffer(commandQueue, d_I, CL_TRUE, 0, dim * dim * sizeof(float), iden, 0, NULL, NULL);
+		if (errCode != CL_SUCCESS) {
+			printf("read after normalization failed %s\n", opencl_errstr(errCode));
+		}
+		
+		
+		//errCode |= clEnqueueWriteBuffer(commandQueue, d_A, CL_TRUE, (iter * dim + iter) * sizeof(float), sizeof(float), one, 0, NULL, NULL);
+		if (errCode != CL_SUCCESS) {
+			printf("after normalize read%s\n", opencl_errstr(errCode));
+		}
+		print_matrix(matrix, iden, dim);
+		
+		
+		errCode = clEnqueueNDRangeKernel(commandQueue, gauss_kernel, 2, itr, gauss_threads, NULL, 0, NULL, NULL);
+		if (errCode != CL_SUCCESS) {
+			printf("after gauss %s\n", opencl_errstr(errCode));
+		}
+		errCode |= clEnqueueNDRangeKernel(commandQueue, gaussfix_kernel, 1, NULL, &normalize_threads, NULL, 0, NULL,NULL);
+		if (errCode != CL_SUCCESS) {
+			printf("after gaussfix %s\n", opencl_errstr(errCode));
+		}
+		errCode = clEnqueueReadBuffer(commandQueue, d_A, CL_FALSE, 0, dim * dim * sizeof(float), matrix, 0, NULL, NULL);
+		errCode |= clEnqueueReadBuffer(commandQueue, d_I, CL_TRUE, 0, dim * dim * sizeof(float), iden, 0, NULL, NULL);
+		if (errCode != CL_SUCCESS) {
+			printf("after gauss read %s\n", opencl_errstr(errCode));
+		}
+		print_matrix(matrix, iden, dim);
+	}
 	// Wait for command completion
 	errCode = clFinish(commandQueue);
 	if (errCode != CL_SUCCESS) {
@@ -301,22 +376,28 @@ void opencl_offload(float *matrix, float *iden, int dim) {
 	}
 	
 	// Release the kernel object
-	errCode = clReleaseKernel(kernel);
+	errCode = clReleaseKernel(normalize_kernel);
+	errCode = clReleaseKernel(gauss_kernel);
+	errCode = clReleaseKernel(gaussfix_kernel);
 	
 	// Release the program object
-	errCode = clReleaseProgram(program);
+	errCode = clReleaseProgram(normalize_program);
+	errCode = clReleaseProgram(gauss_program);
+	errCode = clReleaseProgram(gaussfix_program);
 	
 	// Release the device
 	errCode = clReleaseDevice(deviceID);
 	
 	// Transfer data back from the device to the host
-	errCode = clEnqueueReadBuffer(commandQueue, a_d, CL_TRUE, 0, size * sizeof(double), a, 0, NULL, NULL);
+	errCode = clEnqueueReadBuffer(commandQueue, d_A, CL_TRUE, 0, dim * dim * sizeof(float), matrix, 0, NULL, NULL);
+	errCode |= clEnqueueReadBuffer(commandQueue, d_I, CL_TRUE, 0, dim * dim * sizeof(float), iden, 0, NULL, NULL);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clEnqueueReadBuffer() failed");
 	}
 	
 	// Delete data on the device
-	errCode = clReleaseMemObject(a_d);
+	errCode = clReleaseMemObject(d_A);
+	errCode |= clReleaseMemObject(d_I);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clReleaseMemObject() failed");
 	}
@@ -327,17 +408,66 @@ void opencl_offload(float *matrix, float *iden, int dim) {
 	// release the context
 	errCode = clReleaseContext(context);
 	
-	// Postprocess data on the host
-	// e.g. write data to storage
-	for (int i = 0; i < size; i++) {
-		if (a[i] != 1.) {
-			errx(2, "Computation on GPU failed");
+	
+	
+	
+	// setup and copy matrices to gpu
+	cudaMalloc(&d_A, dim * dim * sizeof(float));
+	cudaMalloc(&d_I, dim * dim * sizeof(float));
+	cudaMemcpy(d_A, matrix, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_I, iden, dim * dim * sizeof(float), cudaMemcpyHostToDevice);
+	cudaCheckErrors();
+	
+	// setup kernelsizes
+	
+	struct cudaDeviceProp properties;
+	cudaGetDeviceProperties(&properties, 0);
+	
+	int row_parts = (dim + 1 > properties.maxThreadsPerBlock) ? std::ceil((dim + 1.) / properties.maxThreadsPerBlock) : 1;
+	int max_row = std::ceil((dim + 1.) / row_parts);
+	dim3 norm_block(max_row);
+	dim3 norm_grid(row_parts);
+	row_parts = (2 * dim > properties.maxThreadsPerBlock) ? std::ceil(2. * dim / properties.maxThreadsPerBlock) : 1;
+	max_row = std::ceil(2. * dim / row_parts);
+	dim3 gauss_block(max_row);
+	dim3 gauss_grid(row_parts, dim);
+	
+	for (int iter = 0; iter < dim; iter++) {
+		if (matrix[iter * dim + iter] == 0) { // swap lines if 0 -> divide by 0 is impossible
+			for (int j = iter + 1; j < dim; j++) { // find new line
+				if (matrix[j * dim + iter] != 0) {
+					for (int x = iter; x < dim; x++) { // swap lines
+						matrix[iter * dim + x] += matrix[j * dim + x];
+						iden[iter * dim + x] += iden[j * dim + x];
+					}
+					break;
+				}
+			}
 		}
+		
+		//normalize
+		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
+		cudaDeviceSynchronize();
+		cudaCheckErrors();
+		matrix[iter * dim + iter] = 1;
+		cudaMemcpy(&d_A[iter * dim + iter], &matrix[iter * dim + iter], sizeof(float), cudaMemcpyHostToDevice);
+		cudaCheckErrors();
+		
+		//gauss
+		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
+		cudaDeviceSynchronize();
+		gauss_fix<<<norm_grid, norm_block>>>(d_A, iter, dim);
+		cudaDeviceSynchronize();
+		cudaCheckErrors();
 	}
+	cudaCheckErrors();
 	
-	// Free memory on the host
-	free(a);
-	
-	return 0;
-}
-
+	// Copy results back to host
+	cudaDeviceSynchronize();
+	cudaCheckErrors();
+	cudaMemcpy(iden, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(matrix, d_A, dim * dim * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaFree(d_A);
+	cudaFree(d_I);
+	cudaCheckErrors();
+}*/

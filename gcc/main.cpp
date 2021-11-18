@@ -7,11 +7,12 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <chrono>
+#include <iomanip>
 
 void matrix_read(int dim, float *matrix) {
 	int row = 0;
 	
-	std::ifstream infile(("../randomMatrix_" + std::to_string(dim) + ".txt").c_str());
+	std::ifstream infile(("randomMatrix_" + std::to_string(dim) + ".txt").c_str());
 	for (std::string line; std::getline(infile, line);) {
 		std::istringstream inputline(line);
 		for (int i = 0; i < dim; i++) {
@@ -22,10 +23,12 @@ void matrix_read(int dim, float *matrix) {
 }
 
 int main(int argc, char *argv[]) {
-	if (argc < 2 || argc > 3)
-		return 0;
+	std::cout << std::fixed << std::setprecision(10);
+	
+	
 	int dimension = std::stoi(argv[1]);
 	int algorithms = std::stoi(argv[2]);
+	int run = std::stoi(argv[3]);
 	auto matrix = new float[dimension * dimension];
 	auto identity_matrix = new float[dimension * dimension];
 	
@@ -45,10 +48,7 @@ int main(int argc, char *argv[]) {
 	
 	std::chrono::time_point <std::chrono::system_clock> start, end;
 	double error;
-	double threshold = 0.001;
-	int errc;
-	double minerr = 1000000.;
-	double maxerr = threshold;
+	
 	
 	if ((algorithms & 0x1) != 0) {
 		auto eigen = new float[dimension * dimension];
@@ -63,28 +63,21 @@ int main(int argc, char *argv[]) {
 		eigenresult = eigenresult.inverse();
 		
 		std::chrono::duration<float> eigen_time = end - start;
-		printf("Eigen Time: %04f\n", eigen_time.count());
+		printf("%f\n", eigen_time.count());
 		
-		errc = 0;
-		minerr = 1000000.;
-		maxerr = threshold;
-		for (int y = 0; y < dimension; y++) {
-			for (int x = 0; x < dimension; x++) {
-				error = fabs(eigenresult(y, x) - eigenM(y, x));
-				if (std::isnan(error)) {
-					printf("NaN\n");
-					return 0;
-				}
-				if (error > threshold) {
-					errc++;
-					if (maxerr < error) {
-						maxerr = error;
+		if (run == 9) {
+			printf("------------------------------\n");
+			for (int y = 0; y < dimension; y++) {
+				for (int x = 0; x < dimension; x++) {
+					error = fabs(eigenresult(y, x) - eigenM(y, x));
+					if (std::isnan(error)) {
+						printf("NaN\n");
+						return 0;
 					}
-					if (minerr > error) minerr = error;
+					std::cout << error << std::endl;
 				}
 			}
 		}
-		printf("Eigen #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
 	}
 	
 	if ((algorithms & 0x2) != 0) {
@@ -101,29 +94,21 @@ int main(int argc, char *argv[]) {
 		single_cpu(cpures, cpu, dimension);
 		
 		std::chrono::duration<float> cpu_time = end - start;
-		printf("CPU Time: %04f\n", cpu_time.count());
+		printf("%f\n", cpu_time.count());
 		
-		errc = 0;
-		minerr = 1000000.;
-		maxerr = threshold;
-		for (int y = 0; y < dimension; y++) {
-			for (int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - cpu[y * dimension + x]);
-				if (std::isnan(error)) {
-					printf("NaN\n");
-					return 0;
-				}
-				if (error > threshold) {
-					errc++;
-					if (maxerr < error) {
-						maxerr = error / matrix[y * dimension + x];
+		if (run == 9) {
+			printf("------------------------------\n");
+			for (int y = 0; y < dimension; y++) {
+				for (int x = 0; x < dimension; x++) {
+					error = fabs(matrix[y * dimension + x] - cpu[y * dimension + x]);
+					if (std::isnan(error)) {
+						printf("NaN\n");
+						return 0;
 					}
-					if (minerr > error) minerr = error / matrix[y * dimension + x];
+					std::cout << error << std::endl;
 				}
-				
 			}
 		}
-		printf("CPU #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
 	}
 	
 	if ((algorithms & 0x4) != 0) {
@@ -138,131 +123,22 @@ int main(int argc, char *argv[]) {
 		openmp_offload(openmpres, openmp, dimension);
 		
 		std::chrono::duration<float> openmp_offload_time = end - start;
-		printf("OpenMP: %04f\n", openmp_offload_time.count());
+		printf("%f\n", openmp_offload_time.count());
 		
-		errc = 0;
-		minerr = 1000000.;
-		maxerr = threshold;
-		for (int y = 0; y < dimension; y++) {
-			for (int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - openmp[y * dimension + x]);
-				if (std::isnan(error)) {
-					printf("NaN\n");
-					return 0;
+		if (run == 9) {
+			printf("------------------------------\n");
+			for (int y = 0; y < dimension; y++) {
+				for (int x = 0; x < dimension; x++) {
+					error = fabs(matrix[y * dimension + x] - openmp[y * dimension + x]);
+					if (std::isnan(error)) {
+						printf("NaN\n");
+						return 0;
+					}
+					std::cout << error << std::endl;
 				}
-				if (error > threshold) {
-					errc++;
-					if (maxerr < error) maxerr = error / matrix[y * dimension + x];
-					else if (minerr > error) minerr = error / matrix[y * dimension + x];
-				}
-				
 			}
-		}
-		printf("OpenMP #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
-		
-	}
-	
-	/*if((algorithms & 0x8) != 0) {
-		auto adjugate = new float[4][4];
-		std::copy(matrix, matrix + dimension * dimension, adjugate);
-		
-		start = std::chrono::high_resolution_clock::now();
-		adjugate(adjugate);
-		end = std::chrono::high_resolution_clock::now();
-		adjugate(adjugate);
-		
-		std::chrono::duration<float> adjugate_time = end - start;
-		printf("Adjugate: %04f\n", adjugate_time.count());
-		
-		errc = 0;
-		minerr = 1000000.;
-		maxerr = threshold;
-		for (int y = 0; y < dimension; y++) {
-			for(int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - openmp[y * dimension + x]);
-				if(std::isnan(error)) {
-					printf("NaN\n");
-					return 0;
-				}
-				if (error > threshold) {
-					errc++;
-					if (maxerr < error) maxerr = error / matrix[y * dimension + x];
-					else if (minerr > error) minerr = error / matrix[y * dimension + x];
-				}
-				
-			}
-		}
-		printf("Adjugate #err: %d - minerr:%04f - maxerr:%04f\n", errc, minerr, maxerr);
-	}*/
-	
-	
-	
-	/*auto openacc = new float[dimension * dimension + dimension];
-	std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension, &openacc[0 * dimension + 0]);
-	auto openaccres = new float[dimension * dimension + dimension];
-	std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension, &openaccres[0 * dimension + 0]);
-	
-	start = std::chrono::high_resolution_clock::now();
-	openacc_offload(openacc, openaccres, dimension);
-	end = std::chrono::high_resolution_clock::now();
-	
-	std::chrono::duration<float> openacc_offload_time = end - start;
-	printf("%04f\n", openacc_offload_time.count());
-	
-	
-	
-	auto cuda = new float[dimension * dimension + dimension];
-	std::copy(&matrix[0 * dimension + 0], &matrix[0 * dimension + 0] + dimension * dimension, &cuda[0 * dimension + 0]);
-	auto cudares = new float[dimension * dimension + dimension];
-	std::copy(&identity_matrix[0 * dimension + 0], &identity_matrix[0 * dimension + 0] + dimension * dimension, &cudares[0 * dimension + 0]);
-	
-	start = std::chrono::high_resolution_clock::now();
-	cuda(cuda, cudares, dimension);
-	end = std::chrono::high_resolution_clock::now();
-	
-	std::chrono::duration<float> cuda_time = end - start;
-	printf("CUDA Time: %04f\n", cuda_time.count());*/
-	
-	
-	/*double threshold = 0.00001;
-	int errc = 0;
-	double minerr = 1000000.;
-	double maxerr = threshold;
-	double maxerrval;
-	for (int i = 0; i < dimension; i++) {
-		for (int j = 0; j < dimension; j++) {
-			double error = fabs(openmpres[i * dimension + j] - eigenresult(i, j));
-			//float error = abs(cpures[i * dimension + j] - openmpres[i * dimension + j]);
-			if (error > threshold || std::isnan(error)) {
-				errc++;
-				//std::cout << "Error at " << i << " " << j << std::endl;
-				//std::cout << eigenresult(i, j) << " vs " << openmpres[i * dimension + j] << std::endl;
-			}
-			if (maxerr < error) {
-				maxerr = error;
-				maxerrval = openmpres[i * dimension + j];
-			}
-			if (minerr > error) minerr = error;
 		}
 	}
-	printf("errc: %d\n", errc);
-	printf("maxerrval: %04f maxerr: %04f  minerr: %04f\n", maxerrval, maxerr, minerr);*/
-	
-	
-	/*for (int i = 0; i < dimension; i++) {
-		for (int j = 0; j < dimension; j++) {
-			printf("%04f ", openmpres[i * dimension + j]);
-		}
-		printf("  \t");
-		for (int j = 0; j < dimension; j++) {
-			printf("%04f ", eigenresult(i, j));
-		}
-		printf("  \t");
-		for (int j = 0; j < dimension; j++) {
-			printf("%04f ", cpures[i * dimension + j]);
-		}
-		printf("\n");
-	}*/
 	
 	return 0;
 }
