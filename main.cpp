@@ -1,19 +1,41 @@
-#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <math.h>
-#include "../implementations/cublas.cu"
-#include "../implementations/cuda.cu"
-#include "../implementations/openacc.cpp"
+#include <sstream>
+#include <string.h>
 
-#ifdef dbl
-using scalar = double;
-#else
-using scalar = float;
+#if (defined __GNUC__ || defined __clang__) && !defined(__NVCOMPILER)
+	#include "implementations/openmp-cpu.cpp"
+	#include "implementations/openmp-offload.cpp"
+	#include "implementations/opencl.cpp"
+	#include "implementations/openacc.cpp"
+	#include <Eigen/Core>
+	#include <Eigen/Dense>
 #endif
 
+#if defined __NVCOMPILER
+	#include "implementations/cublas.cpp"
+	#include "implementations/cuda.cpp"
+	#include "implementations/openacc.cpp"
+	#include "implementations/openmp-cpu.cpp"
+
+	#if __CUDA_ARCH__ > 700
+		#include "implementations/openmp-offload.cpp"
+	#endif
+
+#endif
+
+#ifdef dbl
+	using scalar = double;
+#else
+	using scalar = float;
+#endif
+
+#if (defined __GNUC__ || defined __clang__) && !defined(__NVCOMPILER)
+typedef Eigen::Matrix<scalar, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
+#endif
 
 void matrix_read(char *file, int dim, scalar *matrix) {
 	int row = 0;
@@ -66,7 +88,56 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-#if __CUDA_ARCH__ > 700
+#if (defined __GNUC__ || defined __clang__) && !defined(__NVCOMPILER)
+	MatrixXs eigenM;
+	MatrixXs eigenresult;
+	if (!strcmp(algorithm, "eigen")) {
+		eigenM = Eigen::Map<MatrixXs>(calc_matrix, dimension, dimension);
+		start = std::chrono::high_resolution_clock::now();
+		eigenresult = eigenM.inverse();
+		end = std::chrono::high_resolution_clock::now();
+		measurement = end - start;
+		printf("%f\n", measurement.count());
+
+		start = std::chrono::high_resolution_clock::now();
+		eigenresult = eigenresult.inverse();
+		end = std::chrono::high_resolution_clock::now();
+		measurement = end - start;
+		printf("%f\n", measurement.count());
+	}
+#endif
+
+	if (!strcmp(algorithm, "openmp-cpu")) {
+		start = std::chrono::high_resolution_clock::now();
+		openmp_cpu(calc_matrix, calc_identity, dimension);
+		end = std::chrono::high_resolution_clock::now();
+		measurement = end - start;
+		printf("%f\n", measurement.count());
+
+		start = std::chrono::high_resolution_clock::now();
+		openmp_cpu(calc_identity, calc_matrix, dimension);
+		end = std::chrono::high_resolution_clock::now();
+		measurement = end - start;
+		printf("%f\n", measurement.count());
+	}
+
+#if (defined __GNUC__ || defined __clang__) && !defined(__NVCOMPILER)
+	if (!strcmp(algorithm, "opencl")) {
+		start = std::chrono::high_resolution_clock::now();
+		opencl_offload(calc_matrix, calc_identity, dimension);
+		end = std::chrono::high_resolution_clock::now();
+		measurement = end - start;
+		printf("%f\n", measurement.count());
+
+		start = std::chrono::high_resolution_clock::now();
+		openmp_offload(calc_identity, calc_matrix, dimension);
+		end = std::chrono::high_resolution_clock::now();
+		measurement = end - start;
+		printf("%f\n", measurement.count());
+	}
+#endif
+
+#if (defined __GNUC__ || defined __clang__) || __CUDA_ARCH__ > 700
 	if (!strcmp(algorithm, "openmp-offload")) {
 		start = std::chrono::high_resolution_clock::now();
 		openmp_offload(calc_matrix, calc_identity, dimension);
@@ -81,7 +152,8 @@ int main(int argc, char *argv[]) {
 		printf("%f\n", measurement.count());
 	}
 #endif
-	
+
+#ifdef __NVCOMPILER
 	if (!strcmp(algorithm, "cuda")) {
 		start = std::chrono::high_resolution_clock::now();
 		cuda_offload(calc_matrix, calc_identity, dimension);
@@ -109,6 +181,8 @@ int main(int argc, char *argv[]) {
 		measurement = end - start;
 		printf("%f\n", measurement.count());
 	}
+#endif
+#if defined __GNUC__ || __NVCOMPILER && !defined(__NVCOMPILER)
 	if (!strcmp(algorithm, "openacc")) {
 		start = std::chrono::high_resolution_clock::now();
 		openacc_offload(calc_matrix, calc_identity, dimension);
@@ -122,12 +196,21 @@ int main(int argc, char *argv[]) {
 		measurement = end - start;
 		printf("%f\n", measurement.count());
 	}
+#endif
 
 	if (run == 4) {
 		printf("------------------------------\n");
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - calc_matrix[y * dimension + x]);
+				if (strcmp(algorithm, "eigen")) {
+					error = fabs(matrix[y * dimension + x] - calc_matrix[y * dimension + x]);
+				}
+				#if (defined __GNUC__ || defined __clang__) && !defined(__NVCOMPILER)
+				else {
+					error = fabs(eigenresult(y, x) - eigenM(y, x));
+				}
+				#endif
+				
 				if (std::isnan(error)) {
 					printf("NaN\n");
 					return 0;

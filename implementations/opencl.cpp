@@ -1,126 +1,83 @@
-#include <omp.h>
-#include <stdio.h>
-#include <array>
-#include <stdlib.h>
+#include <CL/opencl.h>
 #include <err.h>
+#include <string>
 
 #ifdef dbl
-using scalar = double;
+	using scalar = double;
 #else
 using scalar = float;
 #endif
 
-void print_matrix(scalar *matrix, scalar *iden, int dim) {
-	for (int i = 0; i < dim; i++) {
-		for (int j = 0; j < dim; j++) {
-			printf("%2f ", matrix[i * dim + j]);
-		}
-		printf("\t\t");
-		for (int j = 0; j < dim; j++) {
-			printf("%2f ", iden[i * dim + j]);
-		}
-		printf("\n");
+
+
+
+#define CaseReturnString(x) case x: return #x;
+
+const char* opencl_errstr(cl_int err)
+{
+	switch (err)
+	{
+		CaseReturnString(CL_SUCCESS                        )
+		CaseReturnString(CL_DEVICE_NOT_FOUND               )
+		CaseReturnString(CL_DEVICE_NOT_AVAILABLE           )
+		CaseReturnString(CL_COMPILER_NOT_AVAILABLE         )
+		CaseReturnString(CL_MEM_OBJECT_ALLOCATION_FAILURE  )
+		CaseReturnString(CL_OUT_OF_RESOURCES               )
+		CaseReturnString(CL_OUT_OF_HOST_MEMORY             )
+		CaseReturnString(CL_PROFILING_INFO_NOT_AVAILABLE   )
+		CaseReturnString(CL_MEM_COPY_OVERLAP               )
+		CaseReturnString(CL_IMAGE_FORMAT_MISMATCH          )
+		CaseReturnString(CL_IMAGE_FORMAT_NOT_SUPPORTED     )
+		CaseReturnString(CL_BUILD_PROGRAM_FAILURE          )
+		CaseReturnString(CL_MAP_FAILURE                    )
+		CaseReturnString(CL_MISALIGNED_SUB_BUFFER_OFFSET   )
+		CaseReturnString(CL_COMPILE_PROGRAM_FAILURE        )
+		CaseReturnString(CL_LINKER_NOT_AVAILABLE           )
+		CaseReturnString(CL_LINK_PROGRAM_FAILURE           )
+		CaseReturnString(CL_DEVICE_PARTITION_FAILED        )
+		CaseReturnString(CL_KERNEL_ARG_INFO_NOT_AVAILABLE  )
+		CaseReturnString(CL_INVALID_VALUE                  )
+		CaseReturnString(CL_INVALID_DEVICE_TYPE            )
+		CaseReturnString(CL_INVALID_PLATFORM               )
+		CaseReturnString(CL_INVALID_DEVICE                 )
+		CaseReturnString(CL_INVALID_CONTEXT                )
+		CaseReturnString(CL_INVALID_QUEUE_PROPERTIES       )
+		CaseReturnString(CL_INVALID_COMMAND_QUEUE          )
+		CaseReturnString(CL_INVALID_HOST_PTR               )
+		CaseReturnString(CL_INVALID_MEM_OBJECT             )
+		CaseReturnString(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR)
+		CaseReturnString(CL_INVALID_IMAGE_SIZE             )
+		CaseReturnString(CL_INVALID_SAMPLER                )
+		CaseReturnString(CL_INVALID_BINARY                 )
+		CaseReturnString(CL_INVALID_BUILD_OPTIONS          )
+		CaseReturnString(CL_INVALID_PROGRAM                )
+		CaseReturnString(CL_INVALID_PROGRAM_EXECUTABLE     )
+		CaseReturnString(CL_INVALID_KERNEL_NAME            )
+		CaseReturnString(CL_INVALID_KERNEL_DEFINITION      )
+		CaseReturnString(CL_INVALID_KERNEL                 )
+		CaseReturnString(CL_INVALID_ARG_INDEX              )
+		CaseReturnString(CL_INVALID_ARG_VALUE              )
+		CaseReturnString(CL_INVALID_ARG_SIZE               )
+		CaseReturnString(CL_INVALID_KERNEL_ARGS            )
+		CaseReturnString(CL_INVALID_WORK_DIMENSION         )
+		CaseReturnString(CL_INVALID_WORK_GROUP_SIZE        )
+		CaseReturnString(CL_INVALID_WORK_ITEM_SIZE         )
+		CaseReturnString(CL_INVALID_GLOBAL_OFFSET          )
+		CaseReturnString(CL_INVALID_EVENT_WAIT_LIST        )
+		CaseReturnString(CL_INVALID_EVENT                  )
+		CaseReturnString(CL_INVALID_OPERATION              )
+		CaseReturnString(CL_INVALID_GL_OBJECT              )
+		CaseReturnString(CL_INVALID_BUFFER_SIZE            )
+		CaseReturnString(CL_INVALID_MIP_LEVEL              )
+		CaseReturnString(CL_INVALID_GLOBAL_WORK_SIZE       )
+		CaseReturnString(CL_INVALID_PROPERTY               )
+		CaseReturnString(CL_INVALID_IMAGE_DESCRIPTOR       )
+		CaseReturnString(CL_INVALID_COMPILER_OPTIONS       )
+		CaseReturnString(CL_INVALID_LINKER_OPTIONS         )
+		CaseReturnString(CL_INVALID_DEVICE_PARTITION_COUNT )
+		default: return "Unknown OpenCL error code";
 	}
-	printf("\n");
 }
-
-
-
-void single_cpu(scalar *matrix, scalar *iden, int dim) {
-	for (int i = 0; i < dim; i++) {
-		if (matrix[i * dim + i] == 0) { // swap lines if 0
-			for (int j = i + 1; j < dim; j++) { // find new line
-				if (matrix[j * dim + i] == 0) {
-					continue;
-				}
-				for (int x = i; x < dim; x++) { // swap lines
-					matrix[i * dim + x] += matrix[j * dim + x];
-					iden[i * dim + x] = iden[j * dim + x];
-				}
-				break;
-				
-			}
-		}
-		
-		//normalize
-		scalar factor = matrix[i * dim + i];
-		for (int x = 0; x < 2 * dim; x++) {
-			if (x < dim)
-				matrix[i * dim + x] /= factor;
-			else
-				iden[i * dim + x - dim] /= factor;
-		}
-		
-		//gauss
-		for (int y = 0; y < dim; y++) {
-			scalar factor = matrix[y * dim + i];
-			if (y != i && factor != 0.0f) {
-				for (int x = i; x < dim + i + 1; x++) {
-					if (x < dim)
-						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
-					else
-						iden[y * dim + x - dim] -= iden[i * dim + x - dim] * factor;
-				}
-			}
-		}
-	}
-}
-
-
-void openmp_offload(scalar *matrix, scalar *iden, int dim) {
-	int i = 0;
-	if(i == 0) printf(omp_is_initial_device() ? "initial" : "offloaded");
-
-#pragma omp target data map(tofrom: matrix[0:dim*dim], iden[0:dim*dim]) map(alloc: i)
-	for (i = 0; i < dim; i++) {
-		if(i == 0) printf(omp_is_initial_device() ? "initial" : "offloaded");
-
-//#pragma omp target update to(i)
-		if (matrix[i * dim + i] == 0) { // swap lines if 0
-			for (int j = i + 1; j < dim; j++) { // find new line
-				if (matrix[j * dim + i] == 0) {
-					continue;
-				}
-#pragma omp target teams distribute parallel for
-				for (int x = i; x < dim; x++) { // swap lines
-					matrix[i * dim + x] += matrix[j * dim + x];
-					iden[i * dim + x] = iden[j * dim + x];
-				}
-				break;
-			}
-		}
-		
-		//normalize
-#pragma omp target teams distribute parallel for simd
-		for (int x = i + 1; x < dim + i + 1; x++) {
-			scalar factor = matrix[i * dim + i];
-			if (x < dim) {
-				matrix[i * dim + x] /= factor;
-			} else {
-				iden[i * dim + x - dim] /= factor;
-			}
-		}
-		matrix[i * dim + i] = 1;
-#pragma omp target update to(matrix[i * dim + i])
-		
-		//gauss
-#pragma omp target teams distribute parallel for
-		for (int y = 0; y < dim; y++) {
-			scalar factor = matrix[y * dim + i];
-			if (y != i && factor != 0.0f) {
-#pragma omp simd
-				for (int x = i; x < dim + i + 1; x++) {
-					if (x < dim)
-						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
-					else
-						iden[y * dim + x - dim] -= iden[i * dim + x - dim] * factor;
-				}
-			}
-		}
-	}
-//#pragma omp target exit data map(from: matrix[0:dim*dim], iden[0:dim*dim])
-}
-
 
 #define CL_TARGET_OPENCL_VERSION 300
 
@@ -189,7 +146,7 @@ void opencl_offload(scalar *matrix, scalar *iden, int dim) {
 	cl_device_id deviceID = NULL;
 	cl_uint numDevices;
 	errCode = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_GPU, 1,
-	                         &deviceID, &numDevices);
+							 &deviceID, &numDevices);
 	if (errCode != CL_SUCCESS) {
 		errx(1, "clGetDeviceIDs() failed");
 	}
@@ -286,11 +243,10 @@ void opencl_offload(scalar *matrix, scalar *iden, int dim) {
 		if (errCode != CL_SUCCESS) {
 			printf("read before normalization failed %s\n", opencl_errstr(errCode));
 		}
-		print_matrix(matrix, iden, dim);
 		
 		
 		errCode = clEnqueueNDRangeKernel(commandQueue, normalize_kernel, 1, itr, &normalize_threads, NULL, 0, NULL,
-		                                 NULL);
+										 NULL);
 		errCode = clEnqueueReadBuffer(commandQueue, d_A, CL_TRUE, 0, dim * dim * sizeof(scalar), matrix, 0, NULL, NULL);
 		errCode |= clEnqueueReadBuffer(commandQueue, d_I, CL_TRUE, 0, dim * dim * sizeof(scalar), iden, 0, NULL, NULL);
 		if (errCode != CL_SUCCESS) {
@@ -301,8 +257,6 @@ void opencl_offload(scalar *matrix, scalar *iden, int dim) {
 		if (errCode != CL_SUCCESS) {
 			printf("after normalize read%s\n", opencl_errstr(errCode));
 		}
-		print_matrix(matrix, iden, dim);
-		
 		
 		errCode = clEnqueueNDRangeKernel(commandQueue, gauss_kernel, 2, itr, gauss_threads, NULL, 0, NULL, NULL);
 		if (errCode != CL_SUCCESS) {
@@ -320,7 +274,6 @@ void opencl_offload(scalar *matrix, scalar *iden, int dim) {
 		if (errCode != CL_SUCCESS) {
 			printf("after gauss read 2 %s\n", opencl_errstr(errCode));
 		}
-		print_matrix(matrix, iden, dim);
 	}
 	// Wait for command completion
 	errCode = clFinish(commandQueue);

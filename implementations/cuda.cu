@@ -1,14 +1,5 @@
-#include <stdio.h>
-#include "cuda_runtime.h"
 #include "cublas_v2.h"
-
-#define cudaCheckErrors() {                                          \
-cudaError_t e=cudaGetLastError();                                 \
-if(e!=cudaSuccess) {                                              \
-printf("Cuda failure %s:%d: '%s'\n",__FILE__,__LINE__,cudaGetErrorString(e));           \
-exit(0); \
-}                                                                 \
-}
+#include "cuda_runtime.h"
 
 #ifdef dbl
 using scalar = double;
@@ -16,100 +7,15 @@ using scalar = double;
 using scalar = float;
 #endif
 
-__host__ __device__ void
-print_matrix(scalar *matrix, scalar *iden, int dim, int xto, int yto, int xfrom = 0, int yfrom = 0) {
-	for (int i = yfrom; i < yto; i++) {
-		for (int j = xfrom; j < xto; j++) {
-			printf("%2f ", matrix[i * dim + j]);
-		}
-		printf("\t\t");
-		for (int j = xfrom; j < xto; j++) {
-			printf("%2f ", iden[i * dim + j]);
-		}
-		printf("\n");
+#define cudaCheckErrors()                                                                    \
+	{                                                                                        \
+		cudaError_t e = cudaGetLastError();                                                  \
+		if (e != cudaSuccess) {                                                              \
+			printf("Cuda failure %s:%d: '%s'\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
+			exit(0);                                                                         \
+		}                                                                                    \
 	}
-	printf("\n");
-}
 
-__host__ __device__ void print_matrix(scalar *matrix, scalar *iden, int dim, int xfrom = 0, int yfrom = 0) {
-	print_matrix(matrix, iden, dim, dim, dim, xfrom, yfrom);
-}
-
-
-void openacc_offload(scalar *matrix, scalar *iden, int dim) {
-#pragma acc data copy(matrix[0:dim * dim], iden[0:dim * dim])
-	for (int i = 0; i < dim; i++) {
-		if (matrix[i * dim + i] == 0) { // swap lines if 0
-			for (int j = i + 1; j < dim; j++) { // find new line
-				if (matrix[j * dim + i] != 0) {
-#pragma acc parallel loop worker vector
-					for (int x = i; x < dim; x++) { // swap lines
-						matrix[i * dim + x] += matrix[j * dim + x];
-						iden[i * dim + x] += iden[j * dim + x];
-					}
-					break;
-				}
-			}
-		}
-		
-		//normalize
-		scalar factor;
-#pragma acc parallel loop gang worker vector device_type(nvidia)
-		for (int x = i; x < dim + i + 1; x++) {
-			factor = matrix[i * dim + i];
-			if (x < dim)
-				matrix[i * dim + x] /= factor;
-			else {
-				iden[i * dim + x - dim] /= factor;
-			}
-		}
-		
-		//gauss
-#pragma acc parallel loop gang worker device_type(nvidia)
-		for (int y = 0; y < dim; y++) {
-			scalar factor = matrix[y * dim + i];
-			if (y != i && factor != 0.0f) {
-#pragma acc loop vector
-				for (int x = i; x < dim + i + 1; x++) {
-					if (x < dim)
-						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
-					else
-						iden[y * dim + x - dim] -= iden[i * dim + x - dim] * factor;
-				}
-			}
-		}
-	}
-}
-
-
-
-
-void cublas_offload(scalar *matrix, scalar *iden, int dim) {
-	scalar *d_A, *d_I;
-	
-	// setup and copy matrices to gpu
-	cudaMalloc(&d_A, dim * dim * sizeof(scalar));
-	cudaMalloc(&d_I, dim * dim * sizeof(scalar));
-	cudaMemcpy(d_A, matrix, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_I, iden, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice);
-	cudaCheckErrors();
-	
-	// setup kernelsizes
-	int info[1];
-	cublasHandle_t cu_handle;
-	cublasCreate(&cu_handle);
-	scalar * const* matrices = &matrix;
-	scalar * const* identities = &iden;
-	
-	cublasSgetrfBatched(cu_handle, dim, matrices, dim, NULL, info, 1);
-	cublasSgetriBatched(cu_handle, dim, matrices, dim, NULL, identities, dim, info, 1);
-	cudaCheckErrors();
-	cudaMemcpy(iden, d_I, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost);
-	cudaMemcpy(matrix, d_A, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost);
-	cudaFree(d_A);
-	cudaFree(d_I);
-	cudaCheckErrors();
-}
 
 __global__ void finddiagonal(scalar *matrix, scalar *iden, int iter, int dim) {
 	int x = threadIdx.x;

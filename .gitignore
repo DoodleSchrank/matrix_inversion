@@ -1,5 +1,7 @@
 .idea
 main
+*-offload
 cmake*
 randomM*
 /output/*
+/matrices/*.txt
