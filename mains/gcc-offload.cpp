@@ -151,9 +151,9 @@ int main(int argc, char *argv[]) {
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
 				if (strcmp(algorithm, "eigen")) {
-					error = fabs(matrix[y * dimension + x] - calc_matrix[y * dimension + x]);
+					error = matrix[y * dimension + x] - calc_matrix[y * dimension + x];
 				} else {
-					error = fabs(eigenresult(y, x) - eigenM(y, x));
+					error = eigenresult(y, x) - eigenM(y, x);
 				}
 
 				if (std::isnan(error)) {

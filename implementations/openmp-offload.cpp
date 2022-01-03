@@ -23,7 +23,7 @@ void openmp_offload(scalar *matrix, scalar *iden, int dim) {
 		}
 
 		//normalize
-#pragma omp target teams distribute parallel for simd
+#pragma omp target teams distribute parallel for
 		for (int x = i + 1; x < dim + i + 1; x++) {
 			scalar factor = matrix[i * dim + i];
 			if (x < dim) {

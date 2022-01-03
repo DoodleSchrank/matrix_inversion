@@ -25,6 +25,7 @@ void openmp_cpu(scalar *matrix, scalar *iden, int dim) {
 		
 		//normalize
 		scalar factor = matrix[i * dim + i];
+#pragma omp parallel for
 		for (int x = 0; x < 2 * dim; x++) {
 			if (x < dim)
 				matrix[i * dim + x] /= factor;
@@ -33,9 +34,11 @@ void openmp_cpu(scalar *matrix, scalar *iden, int dim) {
 		}
 		
 		//gauss
+#pragma omp parallel for
 		for (int y = 0; y < dim; y++) {
 			scalar factor = matrix[y * dim + i];
 			if (y != i && factor != 0.0f) {
+#pragma omp simd
 				for (int x = i; x < dim + i + 1; x++) {
 					if (x < dim)
 						matrix[y * dim + x] -= matrix[i * dim + x] * factor;
