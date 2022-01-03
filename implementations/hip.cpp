@@ -1,20 +1,10 @@
-#include "cublas_v2.h"
-#include "cuda_runtime.h"
+#include "hip/hip_runtime.h"
 
 #ifdef dbl
 using scalar = double;
 #else
 using scalar = float;
 #endif
-
-#define cudaCheckErrors()                                                                    \
-	{                                                                                        \
-		cudaError_t e = cudaGetLastError();                                                  \
-		if (e != cudaSuccess) {                                                              \
-			printf("Cuda failure %s:%d: '%s'\n", __FILE__, __LINE__, cudaGetErrorString(e)); \
-			exit(0);                                                                         \
-		}                                                                                    \
-	}
 
 
 __global__ void finddiagonal(scalar *matrix, scalar *iden, int iter, int dim) {
@@ -83,20 +73,19 @@ __global__ void gauss_fix(scalar *matrix, int iter, int dim) {
 }
 
 
-void cuda_offload(scalar *matrix, scalar *iden, int dim) {
+void hip_offload(scalar *matrix, scalar *iden, int dim) {
 	scalar *d_A, *d_I;
 
 	// setup and copy matrices to gpu
-	cudaMalloc(&d_A, dim * dim * sizeof(scalar));
-	cudaMalloc(&d_I, dim * dim * sizeof(scalar));
-	cudaMemcpy(d_A, matrix, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_I, iden, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice);
-	cudaCheckErrors();
+	hipMalloc(&d_A, dim * dim * sizeof(scalar));
+	hipMalloc(&d_I, dim * dim * sizeof(scalar));
+	hipMemcpy(d_A, matrix, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
+	hipMemcpy(d_I, iden, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
 
 	// setup kernelsizes
 
-	struct cudaDeviceProp properties;
-	cudaGetDeviceProperties(&properties, 0);
+	struct hipDeviceProp properties;
+	hipGetDeviceProperties(&properties, 0);
 
 	int row_parts = 1;
 	int threads = min(2 * dim, properties.maxThreadsPerBlock);
@@ -109,29 +98,24 @@ void cuda_offload(scalar *matrix, scalar *iden, int dim) {
 
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) {// swap lines if 0 -> divide by 0 is impossible
-			finddiagonal<<<norm_grid, norm_block>>>(matrix, iden, iter, dim);
+			hipLaunchKernel(finddiagonal, norm_grid, norm_block, matrix, iden, iter, dim);
 		}
 
 		//normalize
-		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
-		cudaDeviceSynchronize();
-		cudaCheckErrors();
+		hipLaunchKernel(normalize, norm_grid, norm_block, d_A, d_I, iter, dim);
+		hipDeviceSynchronize();
 
 		//gauss
-		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
-		cudaDeviceSynchronize();
-		gauss_fix<<<norm_grid, norm_block>>>(d_A, iter, dim);
-		cudaDeviceSynchronize();
-		cudaCheckErrors();
+		hipLaunchKernelgauss(gauss_grid, gauss_block, d_A, d_I, iter, dim);
+		hipDeviceSynchronize();
+		hipLaunchKernelgauss_fix(norm_grid, norm_block, d_A, iter, dim);
+		hipDeviceSynchronize();
 	}
-	cudaCheckErrors();
 
 	// Copy results back to host
-	cudaDeviceSynchronize();
-	cudaCheckErrors();
-	cudaMemcpy(iden, d_I, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost);
-	cudaMemcpy(matrix, d_A, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost);
-	cudaFree(d_A);
-	cudaFree(d_I);
-	cudaCheckErrors();
+	hipDeviceSynchronize();
+	hipMemcpy(iden, d_I, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost);
+	hipMemcpy(matrix, d_A, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost);
+	hipFree(d_A);
+	hipFree(d_I);
 }

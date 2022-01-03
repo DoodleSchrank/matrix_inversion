@@ -127,7 +127,7 @@ int main(int argc, char *argv[]) {
 		printf("------------------------------\n");
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
-				error = fabs(matrix[y * dimension + x] - calc_matrix[y * dimension + x]);
+				error = matrix[y * dimension + x] - calc_matrix[y * dimension + x];
 				if (std::isnan(error)) {
 					printf("NaN\n");
 					return 0;
