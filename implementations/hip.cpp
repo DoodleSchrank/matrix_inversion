@@ -9,7 +9,8 @@ using scalar = float;
 
 __global__ void finddiagonal(scalar *matrix, scalar *iden, int iter, int dim) {
 	int x = threadIdx.x;
-	__shared__ int newline = 0;
+	__shared__ int newline;
+	newline = 0;
 	if (x == 0) {
 		for (int j = iter + 1; j < dim; j++) {// find new line
 			if (matrix[j * dim + iter] != 0) {
@@ -33,7 +34,8 @@ __global__ void finddiagonal(scalar *matrix, scalar *iden, int iter, int dim) {
 }
 
 __global__ void normalize(scalar *matrix, scalar *iden, int iter, int dim) {
-	__shared__ scalar diag_elem = matrix[iter * dim + iter];
+	__shared__ scalar diag_elem;
+	diag_elem = matrix[iter * dim + iter];
 	__syncthreads();
 
 	int x = threadIdx.x;

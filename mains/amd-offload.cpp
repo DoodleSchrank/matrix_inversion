@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (!strcmp(algorithm, "openmp-offload")) {
 		start = std::chrono::high_resolution_clock::now();
-		opencl_offload(calc_matrix, calc_identity, dimension);
+		openmp_offload(calc_matrix, calc_identity, dimension);
 		end = std::chrono::high_resolution_clock::now();
 		measurement = end - start;
 		printf("%f\n", measurement.count());
