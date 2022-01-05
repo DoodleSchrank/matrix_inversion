@@ -4,7 +4,7 @@
 using scalar = float;
 #endif
 
-void openmp_cpu(float *matrix, float *iden, int dim) {
+void openmp_cpu(scalar *matrix, scalar *iden, int dim) {
 	for (int iter = 0; iter < dim; iter++) {
 		// swap lines if 0
 		if (matrix[iter * dim + iter] == 0) {
@@ -23,7 +23,7 @@ void openmp_cpu(float *matrix, float *iden, int dim) {
 		}
 
 		//normalize
-		float divisor = matrix[iter * dim + iter];
+		scalar divisor = matrix[iter * dim + iter];
 #pragma omp parallel for simd
 		for (int column = iter; column < dim + iter + 1; column++) {
 			if (column < dim) {
@@ -36,7 +36,7 @@ void openmp_cpu(float *matrix, float *iden, int dim) {
 		//gauss
 #pragma omp parallel for
 for (int row = 0; row < dim; row++) {
-			float factor = matrix[row * dim + iter];
+			scalar factor = matrix[row * dim + iter];
 			if (row != iter && factor != 0.0f) {
 #pragma omp simd
 				for (int column = iter; column < dim + iter + 1; column++) {
