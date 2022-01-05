@@ -6,20 +6,13 @@
 #include <sstream>
 #include <string.h>
 
-#include "../implementations/openmp-cpu.cpp"
 #include "../implementations/openmp-offload.cpp"
-#include "../implementations/hip.cpp"
-#include <Eigen/Core>
-#include <Eigen/Dense>
-
 
 #ifdef dbl
 using scalar = double;
 #else
 using scalar = float;
 #endif
-
-typedef Eigen::Matrix<scalar, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
 
 void matrix_read(char *file, int dim, scalar *matrix) {
 	int row = 0;
@@ -84,20 +77,7 @@ int main(int argc, char *argv[]) {
 		measurement = end - start;
 		printf("%f\n", measurement.count());
 	}
-
-	if (!strcmp(algorithm, "hip")) {
-		start = std::chrono::high_resolution_clock::now();
-		hip_offload(calc_matrix, calc_identity, dimension);
-		end = std::chrono::high_resolution_clock::now();
-		measurement = end - start;
-		printf("%f\n", measurement.count());
-
-		start = std::chrono::high_resolution_clock::now();
-		hip_offload(calc_identity, calc_matrix, dimension);
-		end = std::chrono::high_resolution_clock::now();
-		measurement = end - start;
-		printf("%f\n", measurement.count());
-	}
+	
 
 	if (run == 4) {
 		printf("------------------------------\n");
