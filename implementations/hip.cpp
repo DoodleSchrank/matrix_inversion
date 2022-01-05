@@ -86,7 +86,7 @@ void hip_offload(scalar *matrix, scalar *iden, int dim) {
 
 	// setup kernelsizes
 
-	struct hipDeviceProp properties;
+	struct hipDeviceProp_t properties;
 	hipGetDeviceProperties(&properties, 0);
 
 	int row_parts = 1;
