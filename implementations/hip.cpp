@@ -98,17 +98,17 @@ void hip_offload(scalar *matrix, scalar *iden, int dim) {
 
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) {// swap lines if 0 -> divide by 0 is impossible
-			hipLaunchKernel(finddiagonal, norm_grid, norm_block, matrix, iden, iter, dim);
+			hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, sizeof(int), 0, matrix, iden, iter, dim);
 		}
 
 		//normalize
-		hipLaunchKernel(normalize, norm_grid, norm_block, d_A, d_I, iter, dim);
+		hipLaunchKernelGGL(normalize, norm_grid, norm_block, sizeof(scalar), 0, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
 
 		//gauss
-		hipLaunchKernel(gauss, gauss_grid, gauss_block, d_A, d_I, iter, dim);
+		hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, 0, 0, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
-		hipLaunchKernel(gauss_fix, norm_grid, norm_block, d_A, iter, dim);
+		hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, 0, 0, d_A, iter, dim);
 		hipDeviceSynchronize();
 	}
 
