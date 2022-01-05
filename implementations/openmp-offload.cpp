@@ -1,13 +1,15 @@
 #ifdef dbl
-	using scalar = double;
+using scalar = double;
 #else
 using scalar = float;
 #endif
 
 void openmp_offload(scalar *matrix, scalar *iden, int dim) {
-#pragma omp target data map(tofrom: matrix [0:dim * dim], iden [0:dim * dim])
+	scalar factor;
+#pragma omp target data map(tofrom \
+                            : matrix [0:dim * dim], iden [0:dim * dim])
 	for (int iter = 0; iter < dim; iter++) {
-		if (matrix[iter * dim + iter] == 0) {        // swap lines if 0
+		if (matrix[iter * dim + iter] == 0) {     // swap lines if 0
 			for (int j = iter + 1; j < dim; j++) {// find new line
 				if (matrix[j * dim + iter] == 0) {
 					continue;
@@ -22,15 +24,16 @@ void openmp_offload(scalar *matrix, scalar *iden, int dim) {
 		}
 
 		//normalize
-		scalar factor = matrix[iter * dim + iter];
-#pragma omp target teams distribute parallel for simd map(to: factor)
-		for (int column = iter + 1; column < dim + iter + 1; column++) {
-			if (column < dim) {
-				matrix[iter * dim + column] /= factor;
-			} else {
-				iden[iter * dim + column - dim] /= factor;
+#pragma omp target teams distribute parallel for
+			for (int column = iter; column < dim + iter + 1; column++) {
+				scalar factor = matrix[iter * dim + iter];
+				if (column < dim) {
+					matrix[iter * dim + column] /= factor;
+				} else {
+					iden[iter * dim + column - dim] /= factor;
+				}
 			}
-		}
+		
 
 		//gauss
 #pragma omp target teams distribute parallel for
