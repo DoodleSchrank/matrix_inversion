@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <math.h>
 #include "../implementations/cublas.cu"
 #include "../implementations/cuda.cu"
