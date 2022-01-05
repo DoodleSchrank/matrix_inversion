@@ -8,7 +8,7 @@ using scalar = float;
 
 
 __global__ void finddiagonal(scalar *matrix, scalar *iden, int iter, int dim) {
-	int x = hipThreadIdx.x;
+	int x = threadIdx.x;
 	__shared__ int newline = 0;
 	if (x == 0) {
 		for (int j = iter + 1; j < dim; j++) {// find new line
@@ -36,7 +36,7 @@ __global__ void normalize(scalar *matrix, scalar *iden, int iter, int dim) {
 	__shared__ scalar diag_elem = matrix[iter * dim + iter];
 	__syncthreads();
 
-	int x = hipThreadIdx.x;
+	int x = threadIdx.x;
 
 	for (int i = x; i < 2 * dim; i += blockDim.x) {
 		if (i < dim)
@@ -48,13 +48,14 @@ __global__ void normalize(scalar *matrix, scalar *iden, int iter, int dim) {
 
 
 __global__ void gauss(scalar *matrix, scalar *iden, int iter, int dim) {
-	int x = 1 + iter + hipBlockIdx.x * hipBlockDim.x + hipThreadIdx.x;
-	int y = hipBlockIdx.y * hipBlockDim.y + hipThreadIdx.y;
+	int x = 1 + iter + blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x >= 2 * dim || y == iter)
 		return;
 
 	scalar factor = matrix[y * dim + iter];
+
 
 	if (x < dim)
 		matrix[y * dim + x] -= matrix[iter * dim + x] * factor;
@@ -63,7 +64,7 @@ __global__ void gauss(scalar *matrix, scalar *iden, int iter, int dim) {
 }
 
 __global__ void gauss_fix(scalar *matrix, int iter, int dim) {
-	int x = hipBlockIdx.x * hipBlockDim.x + hipThreadIdx.x;
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (x >= dim || x == iter)
 		return;
@@ -97,17 +98,17 @@ void hip_offload(scalar *matrix, scalar *iden, int dim) {
 
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) {// swap lines if 0 -> divide by 0 is impossible
-			hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, matrix, iden, iter, dim);
+			hipLaunchKernel(finddiagonal, norm_grid, norm_block, matrix, iden, iter, dim);
 		}
 
 		//normalize
-		hipLaunchKernelGGL(normalize, norm_grid, norm_block, d_A, d_I, iter, dim);
+		hipLaunchKernel(normalize, norm_grid, norm_block, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
 
 		//gauss
-		hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, d_A, d_I, iter, dim);
+		hipLaunchKernel(gauss, gauss_grid, gauss_block, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
-		hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, d_A, iter, dim);
+		hipLaunchKernel(gauss_fix, norm_grid, norm_block, d_A, iter, dim);
 		hipDeviceSynchronize();
 	}
 
