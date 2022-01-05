@@ -106,9 +106,9 @@ void hip_offload(scalar *matrix, scalar *iden, int dim) {
 		hipDeviceSynchronize();
 
 		//gauss
-		hipLaunchKernelgauss(gauss_grid, gauss_block, d_A, d_I, iter, dim);
+		hipLaunchKernel(gauss, gauss_grid, gauss_block, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
-		hipLaunchKernelgauss_fix(norm_grid, norm_block, d_A, iter, dim);
+		hipLaunchKernel(gauss_fix, norm_grid, norm_block, d_A, iter, dim);
 		hipDeviceSynchronize();
 	}
 
