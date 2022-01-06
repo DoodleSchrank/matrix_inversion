@@ -4,6 +4,7 @@ import shlex
 import sys
 
 def process(binary, algorithm, type, size, dbl = False):
+    print("{} processing {} with matrix type {} and size {}. Its {}\n", binary, algorithm, type, size, "double" if dbl else "single")
     x = "_double" if dbl else ""
     with open("./output/" + binary[2:] + "_" + algorithm + "_" + type + "_" + str(size) + x, 'w') as f:
         for iter in range(5):
