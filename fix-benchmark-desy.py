@@ -16,22 +16,27 @@ def process(binary, algorithm, type, size, dbl = False):
 binaries = ["./gcc-offload", "./clang-offload", "./nvcc-offload", "./gcc-offload-acc", "./gcc-offload-dbl", "./clang-offload-dbl", "./nvcc-offload-dbl", "./gcc-offload-acc-dbl"]
 types = ["normal", "natural", "sparse", "triangle"]
 algorithms_gcc = ["eigen", "openmp-cpu", "openmp-offload"]
-algorithms_nvcc = ["openacc", "cuda", "cublas"]
+algorithms_nvcc = ["openacc", "cuda", "cublas", "openmp-offload"]
 sizes = [2**x for x in range(1,15)] #2^15 = 16384
 
+# get binary
 binary = sys.argv[1]
 
+# get algorithm, if given
 if len(sys.argv > 1):
     algorithms = [sys.argv[2]]
 else:
     algorithms = algorithms_nvcc if binary == binaries[2] or binary == binaries[6] else ["openacc"] if binary == binaries[3] or binary == binaries[7] else algorithms_gcc
 
+# get types if given
 if len(sys.argv > 2):
     types = [sys.argv[3]]
 
+# get sizes if given
 if len(sys.argv > 3):
     sizes = sizes[math.log(int(sys.argv[4]), 2):]
 
+# get double if given
 dbl = True if binary[-3:] == "dbl" else False
 
 for algorithm in algorithms:

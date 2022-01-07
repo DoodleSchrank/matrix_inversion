@@ -8,6 +8,7 @@
 #include "../implementations/cublas.cu"
 #include "../implementations/cuda.cu"
 #include "../implementations/openacc.cpp"
+#include "../implementations/openmp-offload.cpp"
 
 #ifdef dbl
 using scalar = double;
@@ -67,7 +68,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-#if __CUDA_ARCH__ > 700
 	if (!strcmp(algorithm, "openmp-offload")) {
 		start = std::chrono::high_resolution_clock::now();
 		openmp_offload(calc_matrix, calc_identity, dimension);
@@ -81,7 +81,6 @@ int main(int argc, char *argv[]) {
 		measurement = end - start;
 		printf("%f\n", measurement.count());
 	}
-#endif
 	
 	if (!strcmp(algorithm, "cuda")) {
 		start = std::chrono::high_resolution_clock::now();
@@ -105,7 +104,7 @@ int main(int argc, char *argv[]) {
 		printf("%f\n", measurement.count());
 
 		start = std::chrono::high_resolution_clock::now();
-		cuda_offload(calc_identity, calc_matrix, dimension);
+		cublas_offload(calc_identity, calc_matrix, dimension);
 		end = std::chrono::high_resolution_clock::now();
 		measurement = end - start;
 		printf("%f\n", measurement.count());
