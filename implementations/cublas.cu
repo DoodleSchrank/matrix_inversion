@@ -34,12 +34,12 @@ void cublas_offload(scalar *matrix, scalar *result, int dim) {
 	auto **results = (scalar **) new scalar *;
 	scalar **d_results;
 	scalar *d_result;
-	
-	cudacall(cudaMalloc(&d_results, sizeof(float *)));
-	cudacall(cudaMalloc(&d_result, dim * dim * sizeof(float)));
+
+	cudacall(cudaMalloc(&d_results, sizeof(scalar *)));
+	cudacall(cudaMalloc(&d_result, dim * dim * sizeof(scalar)));
 	results[0] = d_result;
-	cudacall(cudaMemcpy(d_results, results, sizeof(float *), cudaMemcpyHostToDevice));
-	
+	cudacall(cudaMemcpy(d_results, results, sizeof(scalar *), cudaMemcpyHostToDevice));
+
 	cublasHandle_t cu_handle;
 	cublascall(cublasCreate_v2(&cu_handle));
 
@@ -62,7 +62,11 @@ void cublas_offload(scalar *matrix, scalar *result, int dim) {
 	cudacall(cudaMemcpy(d_matrices, matrices, sizeof(scalar *), cudaMemcpyHostToDevice));
 	cudacall(cudaMemcpy(d_matrix, matrix, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice));
 
+#ifdef dbl
+	cublascall(cublasDgetrfBatched(cu_handle, dim, d_matrices, dim, pivot_element, d_info, 1));
+#else
 	cublascall(cublasSgetrfBatched(cu_handle, dim, d_matrices, dim, pivot_element, d_info, 1));
+#endif
 	cudacall(cudaMemcpy(h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
 	if (h_info[0] != 0) {
 		fprintf(stderr, "Factorization of matrix %d Failed: Matrix may be singular\n", 0);
@@ -70,16 +74,19 @@ void cublas_offload(scalar *matrix, scalar *result, int dim) {
 		exit(EXIT_FAILURE);
 	}
 
-	float **C = (float **) new float *;
-	float **C_d, *C_dflat;
+	scalar **C = (scalar **) new scalar *;
+	scalar **C_d, *C_dflat;
 
-	cudacall(cudaMalloc(&C_d, sizeof(float *)));
-	cudacall(cudaMalloc(&C_dflat, dim * dim * sizeof(float)));
+	cudacall(cudaMalloc(&C_d, sizeof(scalar *)));
+	cudacall(cudaMalloc(&C_dflat, dim * dim * sizeof(scalar)));
 	C[0] = C_dflat;
-	cudacall(cudaMemcpy(C_d, C, sizeof(float *), cudaMemcpyHostToDevice));
+	cudacall(cudaMemcpy(C_d, C, sizeof(scalar *), cudaMemcpyHostToDevice));
 
-
+#ifdef dbl
+	cublascall(cublasDgetriBatched(cu_handle, dim, (const scalar **) d_matrices, dim, pivot_element, d_results, dim, d_info, 1));
+#else
 	cublascall(cublasSgetriBatched(cu_handle, dim, (const scalar **) d_matrices, dim, pivot_element, d_results, dim, d_info, 1));
+#endif
 	cudacall(cudaMemcpy(h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
 	if (h_info[0] != 0) {
 		fprintf(stderr, "Inversion of matrix %d Failed: Matrix may be singular\n", 0);
