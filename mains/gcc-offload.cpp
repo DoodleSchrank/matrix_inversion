@@ -8,7 +8,6 @@
 
 #include "../implementations/openmp-cpu.cpp"
 #include "../implementations/openmp-offload.cpp"
-#include "../implementations/opencl.cpp"
 #include "../implementations/openacc.cpp"
 #include <Eigen/Core>
 #include <Eigen/Dense>
