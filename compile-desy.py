@@ -1,7 +1,6 @@
 #!/usr/bin/python
 from subprocess import Popen, PIPE, call
 import shlex
-import sys
 
 gcc_location = "/nfs/dust/atlas/user/maniageo/spack/opt/spack/linux-centos7-skylake_avx512/gcc-9.3.0/gcc-11.1.0-qyyagvftz5pgrbuxefahh273x5txjpml/bin/g++"
 clang_location = "/nfs/dust/atlas/user/maniageo/spack/opt/spack/linux-centos7-skylake_avx512/gcc-9.3.0/llvm-12.0.0-fmx2razucqcja44det235qdbqelf2soi/bin/clang++"

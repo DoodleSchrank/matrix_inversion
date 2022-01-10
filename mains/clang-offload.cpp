@@ -8,7 +8,6 @@
 
 #include "../implementations/openmp-cpu.cpp"
 #include "../implementations/openmp-offload.cpp"
-#include "../implementations/opencl.cpp"
 #include "../implementations/openacc.cpp"
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -99,20 +98,6 @@ int main(int argc, char *argv[]) {
 
 		start = std::chrono::high_resolution_clock::now();
 		openmp_cpu(calc_identity, calc_matrix, dimension);
-		end = std::chrono::high_resolution_clock::now();
-		measurement = end - start;
-		printf("%f\n", measurement.count());
-	}
-
-	if (!strcmp(algorithm, "opencl")) {
-		start = std::chrono::high_resolution_clock::now();
-		opencl_offload(calc_matrix, calc_identity, dimension);
-		end = std::chrono::high_resolution_clock::now();
-		measurement = end - start;
-		printf("%f\n", measurement.count());
-
-		start = std::chrono::high_resolution_clock::now();
-		openmp_offload(calc_identity, calc_matrix, dimension);
 		end = std::chrono::high_resolution_clock::now();
 		measurement = end - start;
 		printf("%f\n", measurement.count());
