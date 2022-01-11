@@ -7,8 +7,9 @@ import math
 def process(binary, algorithm, type, size, dbl = False):
 		print(binary + " processing " + algorithm + " with matrix type " + type + " and size " + str(size) + ". It's " + ("double." if dbl else "single."))
 		x = "_double" if dbl else ""
+		max = 1 if dbl and size == 16134 else 5
 		with open("./output/" + binary[2:] + "_" + algorithm + "_" + type + "_" + str(size) + x, 'w') as f:
-				for iter in range(5):
+				for iter in range(max):
 						out = Popen([binary, "./matrices/randomMatrix_" + type + "_" + str(size) + ".txt", str(size), algorithm, str(iter)], stdout=PIPE)
 						f.writelines(str(out.stdout.read().decode('utf-8')))
 		f.close()
@@ -18,9 +19,6 @@ types = ["normal", "natural", "sparse", "triangle"]
 algorithms_gcc = ["eigen", "openmp-cpu", "openmp-offload"]
 algorithms_nvcc = ["openacc", "cuda", "cublas", "openmp-offload"]
 sizes = [2**x for x in range(1,15)] #2^15 = 16384
-
-for arg in sys.argv:
-	print(arg)
 
 # get binary
 binary = sys.argv[1]
