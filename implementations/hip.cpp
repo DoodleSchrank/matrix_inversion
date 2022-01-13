@@ -77,13 +77,14 @@ __global__ void gauss_fix(scalar *matrix, int iter, int dim) {
 
 void hip_offload(scalar *matrix, scalar *iden, int dim) {
 	scalar *d_A, *d_I;
-
+	printf("1: starting offload; next: memcpy\n");
 	// setup and copy matrices to gpu
 	hipMalloc(&d_A, dim * dim * sizeof(scalar));
 	hipMalloc(&d_I, dim * dim * sizeof(scalar));
 	hipMemcpy(d_A, matrix, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
 	hipMemcpy(d_I, iden, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
 
+	printf("2: successfull memcpy; next: kernel parameters\n");
 	// setup kernelsizes
 
 	struct hipDeviceProp_t properties;
@@ -97,21 +98,27 @@ void hip_offload(scalar *matrix, scalar *iden, int dim) {
 	threads = std::ceil(2. * dim / row_parts);
 	dim3 gauss_block(threads);
 	dim3 gauss_grid(row_parts, dim);
-
+	
+	printf("3: successfull kernel parameters; next: algorithm\n");
 	for (int iter = 0; iter < dim; iter++) {
 		if (matrix[iter * dim + iter] == 0) {// swap lines if 0 -> divide by 0 is impossible
 			hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, sizeof(int), 0, matrix, iden, iter, dim);
 		}
+		
+		printf("a: iter: %d after finddiagonal\n");
 
 		//normalize
 		hipLaunchKernelGGL(normalize, norm_grid, norm_block, sizeof(scalar), 0, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
+		printf("a: after normalize\n");
 
 		//gauss
 		hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, 0, 0, d_A, d_I, iter, dim);
 		hipDeviceSynchronize();
+		printf("a: after gauss\n");
 		hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, 0, 0, d_A, iter, dim);
 		hipDeviceSynchronize();
+		printf("a: after gaussfix\n");
 	}
 
 	// Copy results back to host
@@ -120,4 +127,5 @@ void hip_offload(scalar *matrix, scalar *iden, int dim) {
 	hipMemcpy(matrix, d_A, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost);
 	hipFree(d_A);
 	hipFree(d_I);
+	printf("4: after memcpy and free\n");
 }

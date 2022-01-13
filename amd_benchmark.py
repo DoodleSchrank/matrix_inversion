@@ -2,37 +2,40 @@
 from subprocess import Popen, PIPE, call
 import shlex
 import sys
+import math
 
 def process(binary, algorithm, type, size, dbl = False):
+    print(binary + " processing " + algorithm + " with matrix type " + type + " and size " + str(size) + ". It's " + ("double." if dbl else "single."))
     x = "_double" if dbl else ""
+    #max = 5 if size < 1024 and algorithm not in ["openacc", "openmp-offload", "cuda", "cublas"] else 1
+    max = 5 if size < 1024 else 1
     with open("./output/" + binary[2:] + "_" + algorithm + "_" + type + "_" + str(size) + x, 'w') as f:
-        for iter in range(5):
+        for iter in range(max):
             out = Popen([binary, "./matrices/randomMatrix_" + type + "_" + str(size) + ".txt", str(size), algorithm, str(iter)], stdout=PIPE)
             f.writelines(str(out.stdout.read().decode('utf-8')))
     f.close()
 
-clang_location = "/home/spackuser/usr/lib/aomp/bin/clang++"
-hip_location = ""
-
-binaries = ["./hip-offload", "./clang-offload"]
+binaries = ["./aomp-offload", "./aomp-offload-dbl", "./hip-offload", "./hip-offload", "./hip-offload-dbl"]
 types = ["normal", "natural", "sparse", "triangle"]
-algorithms_gcc = ["openmp-offload", "hip"]
-sizes = [2**x for x in range(1,15)] #2^15 = 16384
+sizes = [2**x for x in range(1,15)]
 
-call(shlex.split(clang_location + " -o clang-offload mains/amd-offload.cpp -fopenmp"))
-call(shlex.split(hip_location + " -o hip-offload mains/hip-offload.cpp -fopenmp"))
-for type in types:
-    for size in sizes:
-        process("./hip-offload", "hip", type, size)
-for type in types:
-    for size in sizes:
-        process("./clang-offload", "openmp-offload", type, size)
+# get binary
+binary = sys.argv[1]
 
-call(shlex.split(clang_location + " -o clang-offload mains/amd-offload.cpp -fopenmp -DNAME=dbl"))
-call(shlex.split(hip_location + " -o hip-offload mains/hip-offload.cpp -fopenmp -DNAME=dbl"))
+# get algorithm, if given
+algorithm = binary[2:6] if binary[2] == 'a' else binary[2:5]
+
+# get types if given
+if len(sys.argv) > 2:
+    types = [sys.argv[2]]
+
+# get sizes if given
+if len(sys.argv) > 3:
+    sizes = sizes[math.log(int(sys.argv[3]), 2):]
+
+# get double if given
+dbl = True if binary[-3:] == "dbl" else False
+
 for type in types:
     for size in sizes:
-        process("./hip-offload", "hip", type, size, True)
-for type in types:
-    for size in sizes:
-        process("./clang-offload", "openmp-offload", type, size, True)
+        process(binary, algorithm, type, size, dbl)
