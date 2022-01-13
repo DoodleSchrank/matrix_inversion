@@ -24,20 +24,21 @@ void openmp_offload(scalar *matrix, scalar *iden, int dim) {
 		}
 
 		//normalize
-
-		scalar factor;
-#pragma omp target teams distribute parallel for
-		for (int column = iter; column < dim + iter + 1; column++) {
-			factor = matrix[iter * dim + iter];
-			if (column < dim) {
-				matrix[iter * dim + column] /= factor;
-			} else {
-				iden[iter * dim + column - dim] /= factor;
+#pragma omp target
+		{
+			scalar factor = matrix[iter * dim + iter];
+#pragma omp teams distribute parallel for
+			for (int column = iter; column < dim + iter + 1; column++) {
+				if (column < dim) {
+					matrix[iter * dim + column] /= factor;
+				} else {
+					iden[iter * dim + column - dim] /= factor;
+				}
 			}
-		}
+		};
 
 
-		//gauss
+			//gauss
 #pragma omp target teams distribute parallel for
 		for (int row = 0; row < dim; row++) {
 			scalar factor = matrix[row * dim + iter];

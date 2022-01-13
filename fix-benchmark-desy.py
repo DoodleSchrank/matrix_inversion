@@ -11,6 +11,7 @@ def process(binary, algorithm, type, size, dbl = False):
 		max = 5 if size < 1024 else 1
 		with open("./output/" + binary[2:] + "_" + algorithm + "_" + type + "_" + str(size) + x, 'w') as f:
 				for iter in range(max):
+						iter = 4 if max == 1 else iter
 						out = Popen([binary, "./matrices/randomMatrix_" + type + "_" + str(size) + ".txt", str(size), algorithm, str(iter)], stdout=PIPE)
 						f.writelines(str(out.stdout.read().decode('utf-8')))
 		f.close()
@@ -25,13 +26,13 @@ sizes = [2**x for x in range(1,15)] #2^15 = 16384
 binary = sys.argv[1]
 
 # get algorithm, if given
-if len(sys.argv) > 2:
+if len(sys.argv) > 2 and sys.argv[2] != "all":
 		algorithms = [sys.argv[2]]
 else:
 		algorithms = algorithms_nvcc if binary == binaries[2] or binary == binaries[6] else ["openacc"] if binary == binaries[3] or binary == binaries[7] else algorithms_gcc
 
 # get types if given
-if len(sys.argv) > 3:
+if len(sys.argv) > 3 and sys.argv[3] != "all":
 		types = [sys.argv[3]]
 
 # get sizes if given
