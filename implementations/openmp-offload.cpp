@@ -5,7 +5,6 @@ using scalar = float;
 #endif
 
 void openmp_offload(scalar *matrix, scalar *iden, int dim) {
-	scalar factor;
 #pragma omp target data map(tofrom \
                             : matrix [0:dim * dim], iden [0:dim * dim])
 	for (int iter = 0; iter < dim; iter++) {
