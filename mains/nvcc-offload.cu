@@ -8,7 +8,7 @@
 #include "../implementations/cublas.cu"
 #include "../implementations/cuda.cu"
 #include "../implementations/openacc.cpp"
-#include "../implementations/openmp-offload.cpp"
+#include "../implementations/openmp-offload-llvm.cpp"
 
 #ifdef dbl
 using scalar = double;
