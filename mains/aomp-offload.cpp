@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string.h>
 
-#include "../implementations/openmp-offload.cpp"
+#include "../implementations/openmp-offload-llvm.cpp"
 
 #ifdef dbl
 using scalar = double;
