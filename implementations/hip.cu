@@ -1,6 +1,5 @@
 #include "hip/hip_runtime.h"
 #include "hipblas.h"
-#include "hip/hip_runtime.h"
 
 #ifdef dbl
 using scalar = double;
@@ -8,19 +7,19 @@ using scalar = double;
 using scalar = float;
 #endif
 
-#define cudacall(call)                                                                                                        \
-	do {                                                                                                                      \
+#define cudacall(call)                                                                                                       \
+	do {                                                                                                                     \
 		hipError_t err = (call);                                                                                             \
 		if (hipSuccess != err) {                                                                                             \
 			fprintf(stderr, "CUDA Error:\nFile = %s\nLine = %d\nReason = %s\n", __FILE__, __LINE__, hipGetErrorString(err)); \
 			hipDeviceReset();                                                                                                \
-			exit(EXIT_FAILURE);                                                                                               \
-		}                                                                                                                     \
+			exit(EXIT_FAILURE);                                                                                              \
+		}                                                                                                                    \
 	} while (0)
 
 __global__ void finddiagonal(scalar *A, scalar *I, int iter, int dim) {
 	int column = threadIdx.x;
-	__shared__ int newline = 0;
+	__shared__ int newline;
 	if (column == 0) {
 		for (int row = iter + 1; row < dim; row++) {// find new line
 			if (A[row * dim + iter] != 0) {
@@ -40,7 +39,8 @@ __global__ void finddiagonal(scalar *A, scalar *I, int iter, int dim) {
 }
 
 __global__ void normalize(scalar *A, scalar *I, int iter, int dim) {
-	__shared__ scalar diag_elem = A[iter * dim + iter];
+	__shared__ scalar diag_elem;
+	diag_elem = A[iter * dim + iter];
 	__syncthreads();
 
 	int column = threadIdx.x;
@@ -82,7 +82,7 @@ __global__ void gauss_fix(scalar *A, int iter, int dim) {
 	}
 }
 
-void cuda_offload(scalar *A, scalar *I, int dim) {
+void hip_offload(scalar *A, scalar *I, int dim) {
 	scalar *d_A, *d_I;
 
 	// setup and copy matrices to gpu
