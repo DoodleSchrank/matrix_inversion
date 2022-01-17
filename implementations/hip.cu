@@ -1,5 +1,4 @@
 #include "hip/hip_runtime.h"
-#include "hipblas.h"
 
 #ifdef dbl
 using scalar = double;
