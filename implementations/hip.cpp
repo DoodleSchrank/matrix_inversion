@@ -81,6 +81,7 @@ void hip_offload(scalar *A, scalar *I, int dim) {
 	// setup and copy matrices to gpu
 	hipMalloc(&d_A, dim * dim * sizeof(scalar));
 	hipMalloc(&d_I, dim * dim * sizeof(scalar));
+	printf("1.: succ malloc, next memcpy\n");
 	hipMemcpy(d_A, A, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
 	hipMemcpy(d_I, I, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
 
