@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string.h>
 
-#include "../implementations/hip.cpp"
+#include "../implementations/hip.cu"
 
 
 

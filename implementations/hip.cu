@@ -1,5 +1,6 @@
-#include "cublas_v2.h"
-#include "cuda_runtime.h"
+#include "hip/hip_runtime.h"
+#include "hipblas.h"
+#include "hip/hip_runtime.h"
 
 #ifdef dbl
 using scalar = double;
@@ -9,10 +10,10 @@ using scalar = float;
 
 #define cudacall(call)                                                                                                        \
 	do {                                                                                                                      \
-		cudaError_t err = (call);                                                                                             \
-		if (cudaSuccess != err) {                                                                                             \
-			fprintf(stderr, "CUDA Error:\nFile = %s\nLine = %d\nReason = %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
-			cudaDeviceReset();                                                                                                \
+		hipError_t err = (call);                                                                                             \
+		if (hipSuccess != err) {                                                                                             \
+			fprintf(stderr, "CUDA Error:\nFile = %s\nLine = %d\nReason = %s\n", __FILE__, __LINE__, hipGetErrorString(err)); \
+			hipDeviceReset();                                                                                                \
 			exit(EXIT_FAILURE);                                                                                               \
 		}                                                                                                                     \
 	} while (0)
@@ -85,14 +86,14 @@ void cuda_offload(scalar *A, scalar *I, int dim) {
 	scalar *d_A, *d_I;
 
 	// setup and copy matrices to gpu
-	cudacall(cudaMalloc(&d_A, dim * dim * sizeof(scalar)));
-	cudacall(cudaMalloc(&d_I, dim * dim * sizeof(scalar)));
-	cudacall(cudaMemcpy(d_A, A, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice));
-	cudacall(cudaMemcpy(d_I, I, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice));
+	cudacall(hipMalloc(&d_A, dim * dim * sizeof(scalar)));
+	cudacall(hipMalloc(&d_I, dim * dim * sizeof(scalar)));
+	cudacall(hipMemcpy(d_A, A, dim * dim * sizeof(scalar), hipMemcpyHostToDevice));
+	cudacall(hipMemcpy(d_I, I, dim * dim * sizeof(scalar), hipMemcpyHostToDevice));
 
 	// setup kernel sizes
-	struct cudaDeviceProp properties;
-	cudacall(cudaGetDeviceProperties(&properties, 0));
+	struct hipDeviceProp_t properties;
+	cudacall(hipGetDeviceProperties(&properties, 0));
 
 	int threads = min(2 * dim, properties.maxThreadsPerBlock);
 	dim3 norm_block(threads);
@@ -105,24 +106,24 @@ void cuda_offload(scalar *A, scalar *I, int dim) {
 	for (int iter = 0; iter < dim; iter++) {
 		// swap lines if 0 -> divide by 0 is not allowed
 		if (A[iter * dim + iter] == 0) {
-			cudacall(finddiagonal<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim));
+			cudacall(hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim));
 		}
 
 		//normalize
-		cudacall(normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim));
-		cudacall(cudaDeviceSynchronize());
+		cudacall(hipLaunchKernelGGL(normalize, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim));
+		cudacall(hipDeviceSynchronize());
 
 		//gauss
-		cudacall(gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim));
-		cudacall(cudaDeviceSynchronize());
-		cudacall(gauss_fix<<<norm_grid, norm_block>>>(d_A, iter, dim));
-		cudacall(cudaDeviceSynchronize());
+		cudacall(hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, 0, 0, d_A, d_I, iter, dim));
+		cudacall(hipDeviceSynchronize());
+		cudacall(hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, 0, 0, d_A, iter, dim));
+		cudacall(hipDeviceSynchronize());
 	}
 
 	// Copy results back to host
-	cudacall(cudaDeviceSynchronize());
-	cudacall(cudaMemcpy(I, d_I, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost));
-	cudacall(cudaMemcpy(A, d_A, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost));
-	cudacall(cudaFree(d_A));
-	cudacall(cudaFree(d_I));
+	cudacall(hipDeviceSynchronize());
+	cudacall(hipMemcpy(I, d_I, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost));
+	cudacall(hipMemcpy(A, d_A, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost));
+	cudacall(hipFree(d_A));
+	cudacall(hipFree(d_I));
 }
