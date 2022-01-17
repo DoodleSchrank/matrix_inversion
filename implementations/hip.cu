@@ -105,17 +105,17 @@ void hip_offload(scalar *A, scalar *I, int dim) {
 	for (int iter = 0; iter < dim; iter++) {
 		// swap lines if 0 -> divide by 0 is not allowed
 		if (A[iter * dim + iter] == 0) {
-			cudacall(hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim));
+			hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim);
 		}
 
 		//normalize
-		cudacall(hipLaunchKernelGGL(normalize, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim));
+		hipLaunchKernelGGL(normalize, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim);
 		cudacall(hipDeviceSynchronize());
 
 		//gauss
-		cudacall(hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, 0, 0, d_A, d_I, iter, dim));
+		hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, 0, 0, d_A, d_I, iter, dim);
 		cudacall(hipDeviceSynchronize());
-		cudacall(hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, 0, 0, d_A, iter, dim));
+		hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, 0, 0, d_A, iter, dim);
 		cudacall(hipDeviceSynchronize());
 	}
 
