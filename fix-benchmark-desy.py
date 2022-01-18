@@ -37,7 +37,7 @@ if len(sys.argv) > 3 and sys.argv[3] != "all":
 
 # get sizes if given
 if len(sys.argv) > 4:
-		sizes = sizes[int(math.log(int(sys.argv[4]), 2)):]
+		sizes = sizes[int(math.log(int(sys.argv[4]), 2)) - 1:]
 
 # get double if given
 dbl = True if binary[-3:] == "dbl" else False
