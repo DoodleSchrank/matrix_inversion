@@ -104,17 +104,17 @@ void cuda_offload(scalar *A, scalar *I, int dim) {
 	for (int iter = 0; iter < dim; iter++) {
 		// swap lines if 0 -> divide by 0 is not allowed
 		if (A[iter * dim + iter] == 0) {
-			cudacall(finddiagonal<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim));
+			finddiagonal<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
 		}
 
 		//normalize
-		cudacall(normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim));
+		normalize<<<norm_grid, norm_block>>>(d_A, d_I, iter, dim);
 		cudacall(cudaDeviceSynchronize());
 
 		//gauss
-		cudacall(gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim));
+		gauss<<<gauss_grid, gauss_block>>>(d_A, d_I, iter, dim);
 		cudacall(cudaDeviceSynchronize());
-		cudacall(gauss_fix<<<norm_grid, norm_block>>>(d_A, iter, dim));
+		gauss_fix<<<norm_grid, norm_block>>>(d_A, iter, dim);
 		cudacall(cudaDeviceSynchronize());
 	}
 
