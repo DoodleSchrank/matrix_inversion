@@ -10,12 +10,18 @@
 
 cd /nfs/dust/atlas/user/maniageo/ba/matrix_inversion/
 
-run=('./gcc-offload-acc-dbl openacc all 1024'
-'./gcc-offload-acc openacc all 1024'
-'./gcc-offload-dbl all all 1024'
-'./gcc-offload all all 1024'
-'./clang-offload-dbl all all 1024'
+run=(
+'./clang-offload-dbl openmp-cpu all 1024'
+'./clang-offload-dbl openmp-offload all 1024'
 './clang-offload all all 1024'
+'./gcc-offload-dbl eigen normal 16384'
+'./gcc-offload-dbl eigen natural 1024'
+'./gcc-offload-dbl eigen sparse 1024'
+'./gcc-offload-dbl eigen triangle 1024'
+'./gcc-offload eigen normal 16384'
+'./gcc-offload eigen natural 1024'
+'./gcc-offload eigen sparse 1024'
+'./gcc-offload eigen triangle 1024'
 './nvcc-offload-dbl'
 './nvcc-offload')
 
