@@ -20,7 +20,8 @@ __global__ void finddiagonal(scalar *A, scalar *I, int iter, int dim) {
 	int column = threadIdx.x;
 	__shared__ int newline = 0;
 	if (column == 0) {
-		for (int row = iter + 1; row < dim; row++) {// find new line
+		// find new line
+		for (int row = iter + 1; row < dim; row++) {
 			if (A[row * dim + iter] != 0) {
 				newline = row;
 			}

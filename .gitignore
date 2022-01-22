@@ -5,3 +5,4 @@ cmake*
 randomM*
 /output/*
 /matrices/*.txt
+CMakeLists.txt

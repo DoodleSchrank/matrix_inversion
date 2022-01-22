@@ -6,29 +6,33 @@ using scalar = double;
 using scalar = float;
 #endif
 
+#define hipcall(call) \
+do { \
+hipError_t err = (call); \
+if (hipSuccess != err) { \
+fprintf(stderr, "CUDA Error:\nFile = %s\nLine = %d\nReason = %s\n", __FILE__, __LINE__, hipGetErrorString(err)); \
+hipDeviceReset(); \
+exit(EXIT_FAILURE); \
+} \
+} while (0)
 
 __global__ void finddiagonal(scalar *A, scalar *I, int iter, int dim) {
-	int x = threadIdx.x;
+	int column = threadIdx.x;
 	__shared__ int newline;
-	newline = 0;
-	if (x == 0) {
-		for (int j = iter + 1; j < dim; j++) {// find new line
-			if (A[j * dim + iter] != 0) {
-				newline = j;
+	if (column == 0) {
+		for (int row = iter + 1; row < dim; row++) {// find new line
+			if (A[row * dim + iter] != 0) {
+				newline = row;
 			}
 		}
 	}
 	__syncthreads();
 
-	for (int i = x; i < 2 * dim; i += blockDim.x) {
+	for (int i = column; i < 2 * dim; i += blockDim.x) {
 		if (i < dim) {
-			scalar temp = A[iter * dim + i];
-			A[iter * dim + i] = A[newline * dim + i];
-			A[newline * dim + i] = temp;
+			A[iter * dim + i] += A[newline * dim + i];
 		} else {
-			scalar temp = I[iter * dim + i - dim];
-			I[iter * dim + i - dim] = I[newline * dim + i - dim];
-			I[newline * dim + i - dim] = temp;
+			I[iter * dim + i - dim] += I[newline * dim + i - dim];
 		}
 	}
 }
@@ -38,95 +42,87 @@ __global__ void normalize(scalar *A, scalar *I, int iter, int dim) {
 	diag_elem = A[iter * dim + iter];
 	__syncthreads();
 
-	int x = threadIdx.x;
+	int column = threadIdx.x;
 
-	for (int i = x; i < 2 * dim; i += blockDim.x) {
-		if (i < dim)
+	for (int i = column; i < dim + iter + 1; i += blockDim.x) {
+		if (i < dim) {
 			A[iter * dim + i] /= diag_elem;
-		else if (i < 2 * dim)
+		} else if (i < 2 * dim) {
 			I[iter * dim + i - dim] /= diag_elem;
+		}
 	}
 }
 
-
 __global__ void gauss(scalar *A, scalar *I, int iter, int dim) {
-	int x = 1 + iter + blockIdx.x * blockDim.x + threadIdx.x;
-	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int column = 1 + iter + blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
 
-	if (x >= 2 * dim || y == iter)
+	if (column >= 2 * dim || row == iter)
 		return;
 
-	scalar factor = A[y * dim + iter];
+	scalar factor = A[row * dim + iter];
 
-
-	if (x < dim)
-		A[y * dim + x] -= A[iter * dim + x] * factor;
-	else
-		I[y * dim + x - dim] -= I[iter * dim + x - dim] * factor;
+	for (int i = column; i < dim + iter + 1; i += blockDim.x) {
+		if (i < dim) {
+			A[row * dim + i] -= A[iter * dim + i] * factor;
+		} else if (i < 2 * dim) {
+			I[row * dim + i - dim] -= I[iter * dim + i - dim] * factor;
+		}
+	}
 }
 
 __global__ void gauss_fix(scalar *A, int iter, int dim) {
-	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int row = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (x >= dim || x == iter)
+	if (row >= dim || row == iter)
 		return;
-
-	A[x * dim + iter] = 0;
+	for (int i = row; i < dim; i += blockDim.x) {
+		A[i * dim + iter] = 0;
+	}
 }
-
 
 void hip_offload(scalar *A, scalar *I, int dim) {
 	scalar *d_A, *d_I;
-	printf("1: starting offload; next: memcpy\n");
+
 	// setup and copy matrices to gpu
-	hipMalloc(d_A, dim * dim * sizeof(scalar));
-	hipMalloc(d_I, dim * dim * sizeof(scalar));
-	printf("1.: succ malloc, next memcpy\n");
-	hipMemcpy(d_A, A, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
-	hipMemcpy(d_I, I, dim * dim * sizeof(scalar), hipMemcpyHostToDevice);
+	hipcall(hipMalloc(&d_A, dim * dim * sizeof(scalar)));
+	hipcall(hipMalloc(&d_I, dim * dim * sizeof(scalar)));
+	hipcall(hipMemcpy(d_A, A, dim * dim * sizeof(scalar), hipMemcpyHostToDevice));
+	hipcall(hipMemcpy(d_I, I, dim * dim * sizeof(scalar), hipMemcpyHostToDevice));
 
-	printf("2: successfull memcpy; next: kernel parameters\n");
-	// setup kernelsizes
-
+	// setup kernel sizes
 	struct hipDeviceProp_t properties;
-	hipGetDeviceProperties(&properties, 0);
+	hipcall(hipGetDeviceProperties(&properties, 0));
 
-	int row_parts = 1;
 	int threads = min(2 * dim, properties.maxThreadsPerBlock);
 	dim3 norm_block(threads);
-	dim3 norm_grid(row_parts);
-	row_parts = (2 * dim > properties.maxThreadsPerBlock) ? std::ceil(2. * dim / properties.maxThreadsPerBlock) : 1;
-	threads = std::ceil(2. * dim / row_parts);
+	dim3 norm_grid(1);
+
+	threads = min(2 * dim, properties.maxThreadsPerBlock);
 	dim3 gauss_block(threads);
-	dim3 gauss_grid(row_parts, dim);
-	
-	printf("3: successfull kernel parameters; next: algorithm\n");
+	dim3 gauss_grid(1, dim);
+
 	for (int iter = 0; iter < dim; iter++) {
-		if (A[iter * dim + iter] == 0) {// swap lines if 0 -> divide by 0 is impossible
-			hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, sizeof(int), 0, A, I, iter, dim);
+		// swap lines if 0 -> divide by 0 is not allowed
+		if (A[iter * dim + iter] == 0) {
+			hipLaunchKernelGGL(finddiagonal, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim);
 		}
-		
-		printf("a: iter: %d after finddiagonal\n");
 
 		//normalize
-		hipLaunchKernelGGL(normalize, norm_grid, norm_block, sizeof(scalar), 0, d_A, d_I, iter, dim);
-		hipDeviceSynchronize();
-		printf("a: after normalize\n");
+		hipLaunchKernelGGL(normalize, norm_grid, norm_block, 0, 0, d_A, d_I, iter, dim);
+		hipcall(hipDeviceSynchronize());
 
 		//gauss
 		hipLaunchKernelGGL(gauss, gauss_grid, gauss_block, 0, 0, d_A, d_I, iter, dim);
-		hipDeviceSynchronize();
-		printf("a: after gauss\n");
+		hipcall(hipDeviceSynchronize());
 		hipLaunchKernelGGL(gauss_fix, norm_grid, norm_block, 0, 0, d_A, iter, dim);
-		hipDeviceSynchronize();
-		printf("a: after gaussfix\n");
+		hipcall(hipDeviceSynchronize());
 	}
 
 	// Copy results back to host
-	hipDeviceSynchronize();
-	hipMemcpy(I, d_I, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost);
-	hipMemcpy(A, d_A, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost);
-	hipFree(d_A);
-	hipFree(d_I);
-	printf("4: after memcpy and free\n");
+	hipcall(hipDeviceSynchronize());
+	hipcall(hipMemcpy(I, d_I, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost));
+	hipcall(hipMemcpy(A, d_A, dim * dim * sizeof(scalar), hipMemcpyDeviceToHost));
+	hipcall(hipFree(d_A));
+	hipcall(hipFree(d_I));
 }

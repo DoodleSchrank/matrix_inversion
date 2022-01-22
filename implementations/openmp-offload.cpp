@@ -44,10 +44,11 @@ void openmp_offload(scalar *matrix, scalar *iden, int dim) {
 			if (row != iter && factor != 0.0f) {
 #pragma omp simd
 				for (int column = iter; column < dim + iter + 1; column++) {
-					if (column < dim)
+					if (column < dim) {
 						matrix[row * dim + column] -= matrix[iter * dim + column] * factor;
-					else
+					} else {
 						iden[row * dim + column - dim] -= iden[iter * dim + column - dim] * factor;
+					}
 				}
 			}
 		}

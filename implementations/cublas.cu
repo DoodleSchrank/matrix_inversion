@@ -29,78 +29,50 @@ using scalar = float;
                                                                                                              \
 	} while (0)
 
-void cublas_offload(scalar *matrix, scalar *result, int dim) {
-	scalar **inputs = (scalar **) new scalar *;
-	auto **results = (scalar **) new scalar *;
-	scalar **d_results;
-	scalar *d_result;
+void cublas_offload(float *A, float *I, int dim) {
+	auto **As = (float **) new float *;
+	auto **Is = (float **) new float *;
+	float **d_As;
+	float **d_Is;
+	float *d_A;
+	float *d_I;
 
-	cudacall(cudaMalloc(&d_results, sizeof(scalar *)));
-	cudacall(cudaMalloc(&d_result, dim * dim * sizeof(scalar)));
-	results[0] = d_result;
-	cudacall(cudaMemcpy(d_results, results, sizeof(scalar *), cudaMemcpyHostToDevice));
+	cudacall(cudaMalloc(&d_As, sizeof(float *)));
+	cudacall(cudaMalloc(&d_Is, sizeof(float *)));
+	cudacall(cudaMalloc(&d_A, dim * dim * sizeof(float)));
+	cudacall(cudaMalloc(&d_I, dim * dim * sizeof(float)));
+	As[0] = d_A;
+	Is[0] = d_I;
+	cudacall(cudaMemcpy(d_As, As, sizeof(float *), cudaMemcpyHostToDevice));
+	cudacall(cudaMemcpy(d_Is, Is, sizeof(float *), cudaMemcpyHostToDevice));
+	cudacall(cudaMemcpy(d_A, A, dim * dim * sizeof(float), cudaMemcpyHostToDevice));
+
 
 	cublasHandle_t cu_handle;
 	cublascall(cublasCreate_v2(&cu_handle));
-
 	int *pivot_element;
-	int h_info[1];
 	int *d_info;
-
 	cudacall(cudaMalloc(&pivot_element, sizeof(int)));
 	cudacall(cudaMalloc(&d_info, sizeof(int)));
 
-	auto **matrices = (scalar **) new scalar *;
-	scalar **d_matrices;
-	scalar *d_matrix;
-
-	cudacall(cudaMalloc(&d_matrices, sizeof(scalar *)));
-	cudacall(cudaMalloc(&d_matrix, dim * dim * sizeof(scalar)));
-
-	matrices[0] = d_matrix;
-
-	cudacall(cudaMemcpy(d_matrices, matrices, sizeof(scalar *), cudaMemcpyHostToDevice));
-	cudacall(cudaMemcpy(d_matrix, matrix, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice));
+#ifdef dbl
+	cublascall(cublasDgetrfBatched(cu_handle, dim, d_As, dim, pivot_element, d_info, 1));
+#else
+	cublascall(cublasSgetrfBatched(cu_handle, dim, d_As, dim, pivot_element, d_info, 1));
+#endif
 
 #ifdef dbl
-	cublascall(cublasDgetrfBatched(cu_handle, dim, d_matrices, dim, pivot_element, d_info, 1));
+	cublascall(cublasDgetriBatched(cu_handle, dim, (const float **) d_As, dim, pivot_element, d_Is, dim, d_info, 1));
 #else
-	cublascall(cublasSgetrfBatched(cu_handle, dim, d_matrices, dim, pivot_element, d_info, 1));
+	cublascall(cublasSgetriBatched(cu_handle, dim, (const float **) d_As, dim, pivot_element, d_Is, dim, d_info, 1));
 #endif
-	cudacall(cudaMemcpy(h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
-	if (h_info[0] != 0) {
-		fprintf(stderr, "Factorization of matrix %d Failed: Matrix may be singular\n", 0);
-		cudaDeviceReset();
-		exit(EXIT_FAILURE);
-	}
+	cudacall(cudaMemcpy(I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost));
 
-	scalar **C = (scalar **) new scalar *;
-	scalar **C_d, *C_dflat;
-
-	cudacall(cudaMalloc(&C_d, sizeof(scalar *)));
-	cudacall(cudaMalloc(&C_dflat, dim * dim * sizeof(scalar)));
-	C[0] = C_dflat;
-	cudacall(cudaMemcpy(C_d, C, sizeof(scalar *), cudaMemcpyHostToDevice));
-
-#ifdef dbl
-	cublascall(cublasDgetriBatched(cu_handle, dim, (const scalar **) d_matrices, dim, pivot_element, d_results, dim, d_info, 1));
-#else
-	cublascall(cublasSgetriBatched(cu_handle, dim, (const scalar **) d_matrices, dim, pivot_element, d_results, dim, d_info, 1));
-#endif
-	cudacall(cudaMemcpy(h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
-	if (h_info[0] != 0) {
-		fprintf(stderr, "Inversion of matrix %d Failed: Matrix may be singular\n", 0);
-		cudaDeviceReset();
-		exit(EXIT_FAILURE);
-	}
-	cudacall(cudaMemcpy(result, d_result, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost));
-
-	cudaFree(d_matrices);
-	cudaFree(d_matrix);
-	cudaFree(d_result);
-	cudaFree(d_results);
-	free(matrices);
-	free(C);
+	cudaFree(d_As);
+	cudaFree(d_A);
+	cudaFree(d_I);
+	cudaFree(d_Is);
+	free(As);
 	cudaFree(pivot_element);
 	cudaFree(d_info);
 	cublasDestroy_v2(cu_handle);

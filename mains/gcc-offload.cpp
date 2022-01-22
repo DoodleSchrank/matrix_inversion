@@ -6,20 +6,16 @@
 #include <sstream>
 #include <string.h>
 
+#include "../implementations/eigen.cpp"
 #include "../implementations/openmp-cpu.cpp"
 #include "../implementations/openmp-offload.cpp"
 #include "../implementations/openacc.cpp"
-#include <Eigen/Core>
-#include <Eigen/Dense>
-
 
 #ifdef dbl
 using scalar = double;
 #else
 using scalar = float;
 #endif
-
-typedef Eigen::Matrix<scalar, Eigen::Dynamic, Eigen::Dynamic> MatrixXs;
 
 void matrix_read(char *file, int dim, scalar *matrix) {
 	int row = 0;
@@ -72,18 +68,15 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
-	MatrixXs eigenM;
-	MatrixXs eigenresult;
 	if (!strcmp(algorithm, "eigen")) {
-		eigenM = Eigen::Map<MatrixXs>(calc_matrix, dimension, dimension);
 		start = std::chrono::high_resolution_clock::now();
-		eigenresult = eigenM.inverse();
+		eigen(calc_matrix, dimension);;
 		end = std::chrono::high_resolution_clock::now();
 		measurement = end - start;
 		printf("%f\n", measurement.count());
-
+		
 		start = std::chrono::high_resolution_clock::now();
-		eigenresult = eigenresult.inverse();
+		eigen(calc_matrix, dimension);
 		end = std::chrono::high_resolution_clock::now();
 		measurement = end - start;
 		printf("%f\n", measurement.count());
@@ -135,11 +128,7 @@ int main(int argc, char *argv[]) {
 		printf("------------------------------\n");
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
-				if (strcmp(algorithm, "eigen")) {
-					error = matrix[y * dimension + x] - calc_matrix[y * dimension + x];
-				} else {
-					error = eigenresult(y, x) - eigenM(y, x);
-				}
+				error = matrix[y * dimension + x] - calc_matrix[y * dimension + x];
 
 				if (std::isnan(error)) {
 					printf("NaN\n");
