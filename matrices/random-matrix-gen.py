@@ -5,35 +5,28 @@ import sys
 
 #size = int(sys.argv[1])
 
-
-size = 2
+sizes = [2**x for x in range(1,15)]
 random.seed(2021)
 
-while size < 20000:
+for size in sizes:
 	file = open("randomMatrix_normal_" + str(size) + ".txt", "w")
 	for y in range(size):
 		line = ""
 		for x in range(size):
 			line += str(random.uniform(-1, 1)) + " "
 		file.write(line + "\n")
-	size = size * 2
 	file.close()
 
-
-size = 2
-while size < 20000:
+for size in sizes:
 	file = open("randomMatrix_natural_" + str(size) + ".txt", "w")
 	for y in range(size):
 		line = ""
 		for x in range(size):
 			line += str(random.randint(-100, 100)) + " "
 		file.write(line + "\n")
-	size = size * 2
 	file.close()
 
-
-size = 2
-while size < 20000:
+for size in sizes:
 	file = open("randomMatrix_sparse_" + str(size) + ".txt", "w")
 	for y in range(size):
 		line = ""
@@ -43,12 +36,9 @@ while size < 20000:
 			else:
 				line += "0.0 "
 		file.write(line + "\n")
-	size = size * 2
 	file.close()
 
-
-size = 2
-while size < 20000:
+for size in sizes:
 	file = open("randomMatrix_triangle_" + str(size) + ".txt", "w")
 	for y in range(size):
 		line = ""
@@ -57,5 +47,4 @@ while size < 20000:
 		for x in range(y, size):
 			line += str(random.uniform(-1, 1)) + " "
 		file.write(line + "\n")
-	size = size * 2
 	file.close()
