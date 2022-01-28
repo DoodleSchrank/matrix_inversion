@@ -7,9 +7,9 @@
 #include <string.h>
 
 #include "../implementations/eigen.cpp"
+#include "../implementations/openacc.cpp"
 #include "../implementations/openmp-cpu.cpp"
 #include "../implementations/openmp-offload-llvm.cpp"
-#include "../implementations/openacc.cpp"
 
 #ifdef dbl
 using scalar = double;
@@ -38,7 +38,8 @@ int main(int argc, char *argv[]) {
 	char *algorithm = argv[3];
 	int run = std::stoi(argv[4]);
 	auto matrix = new scalar[dimension * dimension];
-	auto identity_matrix = new scalar[dimension * dimension];
+	auto calc_identity = new scalar[dimension * dimension];
+	auto calc_matrix = new scalar[dimension * dimension];
 
 	matrix_read(file, dimension, static_cast<scalar *>(matrix));
 
@@ -47,10 +48,11 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < dimension; i++) {
 		for (int j = 0; j < dimension; j++) {
 			if (i == j) {
-				identity_matrix[i * dimension + i] = 1;
+				calc_identity[i * dimension + i] = 1;
 			} else {
-				identity_matrix[i * dimension + j] = 0;
+				calc_identity[i * dimension + j] = 0;
 			}
+			calc_matrix[y * dimension + x] = matrix[y * dimension + x];
 		}
 	}
 
@@ -58,23 +60,14 @@ int main(int argc, char *argv[]) {
 	std::chrono::duration<scalar> measurement;
 	double error;
 
-	scalar *calc_matrix = new scalar[dimension * dimension];
-	scalar *calc_identity = new scalar[dimension * dimension];
-#pragma omp parallel for collapse(1)
-	for (int y = 0; y < dimension; y++) {
-		for (int x = 0; x < dimension; x++) {
-			calc_matrix[y * dimension + x] = matrix[y * dimension + x];
-			calc_identity[y * dimension + x] = identity_matrix[y * dimension + x];
-		}
-	}
-	
 	if (!strcmp(algorithm, "eigen")) {
 		start = std::chrono::high_resolution_clock::now();
-		eigen(calc_matrix, dimension);;
+		eigen(calc_matrix, dimension);
+		;
 		end = std::chrono::high_resolution_clock::now();
 		measurement = end - start;
 		printf("%f\n", measurement.count());
-		
+
 		start = std::chrono::high_resolution_clock::now();
 		eigen(calc_matrix, dimension);
 		end = std::chrono::high_resolution_clock::now();
@@ -109,7 +102,7 @@ int main(int argc, char *argv[]) {
 		measurement = end - start;
 		printf("%f\n", measurement.count());
 	}
-	
+
 	if (!strcmp(algorithm, "openacc")) {
 		start = std::chrono::high_resolution_clock::now();
 		openacc_offload(calc_matrix, calc_identity, dimension);
@@ -129,7 +122,7 @@ int main(int argc, char *argv[]) {
 		for (int y = 0; y < dimension; y++) {
 			for (int x = 0; x < dimension; x++) {
 				error = matrix[y * dimension + x] - calc_matrix[y * dimension + x];
-				
+
 				if (std::isnan(error)) {
 					printf("NaN\n");
 					return 0;

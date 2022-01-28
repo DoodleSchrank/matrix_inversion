@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
 	int run = std::stoi(argv[4]);
 	auto matrix = new scalar[dimension * dimension];
 	auto calc_identity = new scalar[dimension * dimension];
+	auto calc_matrix = new scalar[dimension * dimension];
 
 	matrix_read(file, dimension, static_cast<scalar *>(matrix));
 
@@ -51,21 +52,14 @@ int main(int argc, char *argv[]) {
 			} else {
 				calc_identity[i * dimension + j] = 0;
 			}
-		}
-	}
-	
-	scalar *calc_matrix = new scalar[dimension * dimension];
-#pragma omp parallel for collapse(2)
-	for (int y = 0; y < dimension; y++) {
-		for (int x = 0; x < dimension; x++) {
 			calc_matrix[y * dimension + x] = matrix[y * dimension + x];
 		}
 	}
-	
+
 	std::chrono::time_point<std::chrono::system_clock> start, end;
 	std::chrono::duration<scalar> measurement;
 	double error;
-	
+
 	if (!strcmp(algorithm, "eigen")) {
 		start = std::chrono::high_resolution_clock::now();
 		eigen(calc_matrix, dimension);;

@@ -5,5 +5,10 @@ binaries = ["./gcc-offload", "./clang-offload", "./nvcc-offload", "./gcc-offload
 
 #call(["python", "benchmark-desy.py", binary, "openmp-offload"]).
 
-for binary in binaries:
-    out = call(["python", "benchmark-desy.py", binary])
+arguments = ["./gcc-offload-dbl",
+             "./gcc-offload-acc-dbl",
+             "./clang-offload-dbl",
+             "./nvcc-offload-dbl",]
+
+for arg in arguments:
+    out = call(["python", "benchmark-desy.py", arg])

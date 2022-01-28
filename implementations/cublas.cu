@@ -29,23 +29,23 @@ using scalar = float;
                                                                                                              \
 	} while (0)
 
-void cublas_offload(float *A, float *I, int dim) {
-	auto **As = (float **) new float *;
-	auto **Is = (float **) new float *;
-	float **d_As;
-	float **d_Is;
-	float *d_A;
-	float *d_I;
+void cublas_offload(scalar *A, scalar *I, int dim) {
+	auto **As = (scalar **) new scalar *;
+	auto **Is = (scalar **) new scalar *;
+	scalar **d_As;
+	scalar **d_Is;
+	scalar *d_A;
+	scalar *d_I;
 
-	cudacall(cudaMalloc(&d_As, sizeof(float *)));
-	cudacall(cudaMalloc(&d_Is, sizeof(float *)));
-	cudacall(cudaMalloc(&d_A, dim * dim * sizeof(float)));
-	cudacall(cudaMalloc(&d_I, dim * dim * sizeof(float)));
+	cudacall(cudaMalloc(&d_As, sizeof(scalar *)));
+	cudacall(cudaMalloc(&d_Is, sizeof(scalar *)));
+	cudacall(cudaMalloc(&d_A, dim * dim * sizeof(scalar)));
+	cudacall(cudaMalloc(&d_I, dim * dim * sizeof(scalar)));
 	As[0] = d_A;
 	Is[0] = d_I;
-	cudacall(cudaMemcpy(d_As, As, sizeof(float *), cudaMemcpyHostToDevice));
-	cudacall(cudaMemcpy(d_Is, Is, sizeof(float *), cudaMemcpyHostToDevice));
-	cudacall(cudaMemcpy(d_A, A, dim * dim * sizeof(float), cudaMemcpyHostToDevice));
+	cudacall(cudaMemcpy(d_As, As, sizeof(scalar *), cudaMemcpyHostToDevice));
+	cudacall(cudaMemcpy(d_Is, Is, sizeof(scalar *), cudaMemcpyHostToDevice));
+	cudacall(cudaMemcpy(d_A, A, dim * dim * sizeof(scalar), cudaMemcpyHostToDevice));
 
 
 	cublasHandle_t cu_handle;
@@ -62,11 +62,11 @@ void cublas_offload(float *A, float *I, int dim) {
 #endif
 
 #ifdef dbl
-	cublascall(cublasDgetriBatched(cu_handle, dim, (const float **) d_As, dim, pivot_element, d_Is, dim, d_info, 1));
+	cublascall(cublasDgetriBatched(cu_handle, dim, (const scalar **) d_As, dim, pivot_element, d_Is, dim, d_info, 1));
 #else
-	cublascall(cublasSgetriBatched(cu_handle, dim, (const float **) d_As, dim, pivot_element, d_Is, dim, d_info, 1));
+	cublascall(cublasSgetriBatched(cu_handle, dim, (const scalar **) d_As, dim, pivot_element, d_Is, dim, d_info, 1));
 #endif
-	cudacall(cudaMemcpy(I, d_I, dim * dim * sizeof(float), cudaMemcpyDeviceToHost));
+	cudacall(cudaMemcpy(I, d_I, dim * dim * sizeof(scalar), cudaMemcpyDeviceToHost));
 
 	cudaFree(d_As);
 	cudaFree(d_A);

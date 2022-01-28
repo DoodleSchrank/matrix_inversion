@@ -23,7 +23,7 @@ binaries = ["./gcc-offload", "./clang-offload", "./nvcc-offload", "./gcc-offload
 types = ["normal", "natural", "sparse", "triangle"]
 algorithms_gcc = ["eigen", "openmp-cpu", "openmp-offload"]
 algorithms_nvcc = ["openacc", "cuda", "cublas", "openmp-offload"]
-sizes = [2**x for x in range(1,15)] #2^15 = 16384
+sizes = [2**x for x in range(1,14)] #2^15 = 16384
 
 # get binary
 binary = sys.argv[1]
